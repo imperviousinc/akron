@@ -1,0 +1,24 @@
+[package]
+name = "akron"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "process", "time", "signal", "net", "io-std", "io-util", "sync", "fs"] }
+anyhow = "1.0.86"
+log = "0.4.21"
+spaces_client = { git = "https://github.com/spacesprotocol/spaces.git" }
+yuki = { git = "https://github.com/buffrr/yuki.git", features = ["default"] }
+env_logger = "0.11.3"
+reqwest = { version = "0.12.5", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3.31"
+hex = "0.4.3"
+directories = "6.0.0"
+
+[lib]
+name = "akrond"
+path = "src/lib.rs"
+
+[[bin]]
+name = "akrond"
+path = "bin/akrond.rs"
