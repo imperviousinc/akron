@@ -1,5 +1,10 @@
 [workspace]
-
 resolver = "2"
-members = [ "akrond"]
+members = ["akrond", "akron-gui"]
 
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+
+[profile.release]
+lto = true

@@ -1,0 +1,33 @@
+[package]
+name = "akron-gui"
+version.workspace = true
+edition.workspace = true
+
+[lints.clippy]
+large_enum_variant = "allow"
+
+[dependencies]
+akrond = { path = "../akrond" }
+
+spaces_client = { git = "https://github.com/spacesprotocol/spaces.git" }
+spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git" }
+spaces_wallet = { git = "https://github.com/spacesprotocol/spaces.git" }
+
+tokio = { version = "1", default-features = false, features = ["fs"] }
+iced = { version = "0.13.1", default-features = false, features = [
+    "wgpu",
+    "tiny-skia",
+    "tokio",
+    "qr_code",
+    "advanced",
+] }
+jsonrpsee = { version = "0.22.5", features = ["http-client"] }
+hex = "0.4.3"
+rustc-hash = "1.1"
+rfd = { version = "0.14", default-features = false, features = [
+    "xdg-portal",
+    "tokio",
+] }
+directories = "5.0"
+serde = "1"
+serde_json = "1"

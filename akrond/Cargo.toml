@@ -1,7 +1,7 @@
 [package]
-name = "akron"
-version = "0.0.1"
-edition = "2021"
+name = "akrond"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "process", "time", "signal", "net", "io-std", "io-util", "sync", "fs"] }
