@@ -1,6 +1,6 @@
-use iced::{Color, Element, Subscription, Task, application, theme, window};
+use iced::{application, theme, window, Color, Element, Subscription, Task};
 
-use crate::{Config, pages::*};
+use crate::{pages::*, Config};
 
 #[derive(Debug)]
 pub enum State {
@@ -75,7 +75,7 @@ impl State {
                 }
                 main::Action::Task(task) => task.map(Message::Main),
             },
-            _ => unreachable!(),
+            _ => Task::none(),
         }
     }
 

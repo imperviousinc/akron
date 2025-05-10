@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use iced::Task;
 use jsonrpsee::{
     core::ClientError,
@@ -75,11 +77,18 @@ impl Client {
                 let (akron, shutdown) = Akron::create();
                 let yuki_data_dir = data_dir.join("yuki");
                 let spaces_data_dir = data_dir.join("spaces");
-                let mut yuki_args: Vec<String> = ["--data-dir", yuki_data_dir.to_str().unwrap()]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
+                let mut yuki_args: Vec<String> = [
+                    "--chain",
+                    &network.fallback_network().to_string(),
+                    "--data-dir",
+                    yuki_data_dir.to_str().unwrap(),
+                ]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
                 let spaces_args: Vec<String> = [
+                    "--chain",
+                    &network.to_string(),
                     "--bitcoin-rpc-url",
                     "http://127.0.0.1:8225",
                     "--data-dir",
@@ -115,17 +124,20 @@ impl Client {
                         prune_point.height
                     ));
                 }
-                akron
-                    .start(ServiceKind::Yuki, yuki_args)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                akron
+                if let Err(e) = akron.start(ServiceKind::Yuki, yuki_args).await {
+                    let _ = shutdown.send(());
+                    return Err(e.to_string());
+                }
+                if let Err(e) = akron
                     .start(
                         ServiceKind::Spaces,
                         spaces_args.iter().map(|s| s.to_string()).collect(),
                     )
                     .await
-                    .map_err(|e| e.to_string())?;
+                {
+                    let _ = shutdown.send(());
+                    return Err(e.to_string());
+                }
                 (
                     format!("http://127.0.0.1:{}", default_spaces_rpc_port(network)),
                     Some(shutdown),
@@ -140,7 +152,10 @@ impl Client {
             } => {
                 let (akron, shutdown) = Akron::create();
                 let spaces_data_dir = data_dir.join("spaces");
+                let network_string = network.to_string();
                 let mut spaces_args = vec![
+                    "--chain",
+                    &network_string,
                     "--data-dir",
                     spaces_data_dir.to_str().unwrap(),
                     "--bitcoin-rpc-url",
@@ -157,15 +172,18 @@ impl Client {
                         password,
                     ]);
                 }
-                akron
+                if let Err(e) = akron
                     .start(
                         ServiceKind::Spaces,
                         spaces_args.iter().map(|s| s.to_string()).collect(),
                     )
                     .await
-                    .map_err(|e| e.to_string())?;
+                {
+                    let _ = shutdown.send(());
+                    return Err(e.to_string());
+                }
                 (
-                    format!("http://127.0.0.1:{}", default_spaces_rpc_port(&network)),
+                    format!("http://127.0.0.1:{}", default_spaces_rpc_port(network)),
                     Some(shutdown),
                 )
             }
@@ -174,14 +192,34 @@ impl Client {
         let client = HttpClientBuilder::default()
             .build(spaces_rpc_url)
             .map_err(|e| e.to_string())?;
-        let server_info = client.get_server_info().await.map_err(|e| e.to_string())?;
-        let network = match &backend_config {
-            ConfigBackend::Akrond { network, .. }
-            | ConfigBackend::Bitcoind { network, .. }
-            | ConfigBackend::Spaced { network, .. } => network,
-        };
-        if server_info.network != network.to_string() {
-            return Err("Wrong network".to_string());
+        let mut server_info_result = client.get_server_info().await;
+        let mut attempts = 1;
+        while server_info_result.is_err() && attempts != 5 {
+            server_info_result = client.get_server_info().await;
+            let _ = tokio::time::sleep(Duration::from_secs(1)).await;
+            attempts += 1;
+        }
+        match server_info_result {
+            Ok(server_info) => {
+                match &backend_config {
+                    ConfigBackend::Akrond { .. } => {}
+                    ConfigBackend::Bitcoind { network, .. }
+                    | ConfigBackend::Spaced { network, .. } => {
+                        if server_info.network != network.to_string() {
+                            if let Some(shutdown) = shutdown {
+                                let _ = shutdown.send(());
+                            }
+                            return Err("Wrong network".to_string());
+                        }
+                    }
+                };
+            }
+            Err(e) => {
+                if let Some(shutdown) = shutdown {
+                    let _ = shutdown.send(());
+                }
+                return Err(e.to_string());
+            }
         }
         Ok((Self { client, shutdown }, backend_config))
     }

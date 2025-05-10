@@ -86,6 +86,9 @@ impl State {
                 Action::none()
             }
             Message::NetworkSelect(value) => {
+                if self.connecting {
+                    return Action::none();
+                }
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Akrond { network, .. })
                     | Some(ConfigBackend::Bitcoind { network, .. })
@@ -95,6 +98,9 @@ impl State {
                 Action::none()
             }
             Message::UrlInput(value) => {
+                if self.connecting {
+                    return Action::none();
+                }
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { url, .. })
                     | Some(ConfigBackend::Spaced { url, .. }) => *url = value,
@@ -103,6 +109,9 @@ impl State {
                 Action::none()
             }
             Message::CookieInput(value) => {
+                if self.connecting {
+                    return Action::none();
+                }
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { cookie, .. }) => *cookie = value,
                     _ => unreachable!(),
@@ -110,6 +119,9 @@ impl State {
                 Action::none()
             }
             Message::UserInput(value) => {
+                if self.connecting {
+                    return Action::none();
+                }
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { user, .. }) => *user = value,
                     _ => unreachable!(),
@@ -117,6 +129,9 @@ impl State {
                 Action::none()
             }
             Message::PasswordInput(value) => {
+                if self.connecting {
+                    return Action::none();
+                }
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { password, .. }) => *password = value,
                     _ => unreachable!(),
@@ -124,6 +139,9 @@ impl State {
                 Action::none()
             }
             Message::Connect => {
+                if self.connecting {
+                    return Action::none();
+                }
                 self.connecting = true;
                 let data_dir = self.config.data_dir().to_path_buf();
                 let backend_config = self.config.backend.clone().unwrap();
@@ -172,12 +190,18 @@ impl State {
                 }
             },
             Message::Reset => {
+                if self.connecting {
+                    return Action::none();
+                }
                 self.config.backend = None;
                 self.client = None;
                 self.connected = false;
                 Action::none()
             }
             Message::Disconnect => {
+                if self.connecting {
+                    return Action::none();
+                }
                 self.client = None;
                 self.connected = false;
                 Action::none()

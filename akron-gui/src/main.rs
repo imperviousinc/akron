@@ -57,6 +57,10 @@ impl Config {
         fs::write(&self.path, config).unwrap();
     }
 
+    pub fn remove(&self) {
+        fs::remove_file(&self.path).unwrap();
+    }
+
     pub fn reset(&mut self) {
         self.backend = None;
         self.wallet = None;

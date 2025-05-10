@@ -636,7 +636,10 @@ impl State {
                             .chain(self.list_wallets()),
                     )
                 }
-                settings::Action::ResetBackend => Action::Return(self.config.clone()),
+                settings::Action::ResetBackend => {
+                    self.config.remove();
+                    Action::Return(self.config.clone())
+                }
                 settings::Action::None => Action::Task(Task::none()),
             },
         }
