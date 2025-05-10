@@ -12,8 +12,9 @@ use spaces_client::config::ExtendedNetwork;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConfigBackend {
-    Embedded {
+    Akrond {
         network: ExtendedNetwork,
+        prune_point: Option<spaces_protocol::constants::ChainAnchor>,
     },
     Bitcoind {
         network: ExtendedNetwork,
@@ -60,8 +61,24 @@ impl Config {
         self.backend = None;
         self.wallet = None;
     }
+
+    pub fn data_dir(&self) -> &std::path::Path {
+        self.path.parent().unwrap()
+    }
 }
 pub fn main() -> iced::Result {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(service) = akrond::runner::ServiceRunner::parse(&args) {
+        if let Err(e) = service.run() {
+            eprintln!("{}", e);
+            use std::io::Write;
+            let _ = std::io::stdout().lock().flush();
+            let _ = std::io::stderr().lock().flush();
+            std::process::exit(1)
+        }
+        return Ok(());
+    }
+
     let dirs = ProjectDirs::from("", "", "akron").unwrap();
     let data_dir = dirs.data_dir();
     fs::create_dir_all(data_dir).unwrap();

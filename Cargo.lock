@@ -68,9 +68,9 @@ dependencies = [
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
- "spaces_client 0.0.7 (git+https://github.com/Ximik/spaces.git)",
- "spaces_protocol 0.0.7 (git+https://github.com/Ximik/spaces.git)",
- "spaces_wallet 0.0.7 (git+https://github.com/Ximik/spaces.git)",
+ "spaces_client",
+ "spaces_protocol",
+ "spaces_wallet",
  "tokio",
 ]
 
@@ -85,7 +85,7 @@ dependencies = [
  "hex",
  "log",
  "reqwest",
- "spaces_client 0.0.7 (git+https://github.com/spacesprotocol/spaces.git)",
+ "spaces_client",
  "tokio",
  "yuki",
 ]
@@ -4624,38 +4624,8 @@ dependencies = [
  "serde",
  "serde_json",
  "spacedb",
- "spaces_protocol 0.0.7 (git+https://github.com/spacesprotocol/spaces.git)",
- "spaces_wallet 0.0.7 (git+https://github.com/spacesprotocol/spaces.git)",
- "tabled",
- "threadpool",
- "tokio",
- "tower 0.4.13",
-]
-
-[[package]]
-name = "spaces_client"
-version = "0.0.7"
-source = "git+https://github.com/Ximik/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bincode",
- "clap",
- "colored",
- "ctrlc",
- "directories 5.0.1",
- "domain",
- "env_logger",
- "futures",
- "hex",
- "jsonrpsee",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "spacedb",
- "spaces_protocol 0.0.7 (git+https://github.com/Ximik/spaces.git)",
- "spaces_wallet 0.0.7 (git+https://github.com/Ximik/spaces.git)",
+ "spaces_protocol",
+ "spaces_wallet",
  "tabled",
  "threadpool",
  "tokio",
@@ -4666,17 +4636,6 @@ dependencies = [
 name = "spaces_protocol"
 version = "0.0.7"
 source = "git+https://github.com/spacesprotocol/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
-dependencies = [
- "bincode",
- "bitcoin",
- "log",
- "serde",
-]
-
-[[package]]
-name = "spaces_protocol"
-version = "0.0.7"
-source = "git+https://github.com/Ximik/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
 dependencies = [
  "bincode",
  "bitcoin",
@@ -4701,27 +4660,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
- "spaces_protocol 0.0.7 (git+https://github.com/spacesprotocol/spaces.git)",
-]
-
-[[package]]
-name = "spaces_wallet"
-version = "0.0.7"
-source = "git+https://github.com/Ximik/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
-dependencies = [
- "anyhow",
- "bdk_wallet",
- "bech32",
- "bincode",
- "bitcoin",
- "ctrlc",
- "hex",
- "jsonrpc",
- "log",
- "secp256k1",
- "serde",
- "serde_json",
- "spaces_protocol 0.0.7 (git+https://github.com/Ximik/spaces.git)",
+ "spaces_protocol",
 ]
 
 [[package]]

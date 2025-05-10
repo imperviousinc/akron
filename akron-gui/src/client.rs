@@ -4,18 +4,22 @@ use jsonrpsee::{
     http_client::{HttpClient, HttpClientBuilder},
 };
 
-use spaces_client::rpc::{
-    BidParams, OpenParams, RegisterParams, RpcClient, RpcWalletRequest, RpcWalletTxBuilder,
-    SendCoinsParams, TransferSpacesParams,
+use spaces_client::{
+    config::default_spaces_rpc_port,
+    config::ExtendedNetwork,
+    rpc::{
+        BidParams, OpenParams, RegisterParams, RpcClient, RpcWalletRequest, RpcWalletTxBuilder,
+        SendCoinsParams, TransferSpacesParams,
+    },
 };
+use spaces_protocol::constants::ChainAnchor;
 
 pub use spaces_client::{
     rpc::ServerInfo,
     wallets::{AddressKind, ListSpacesResponse, TxInfo, WalletInfoWithProgress, WalletResponse},
 };
-pub use spaces_protocol::{Covenant, FullSpaceOut, bitcoin::Txid, slabel::SLabel};
+pub use spaces_protocol::{bitcoin::Txid, slabel::SLabel, Covenant, FullSpaceOut};
 pub use spaces_wallet::{
-    Balance, Listing,
     bitcoin::{Amount, FeeRate, OutPoint},
     export::WalletExport,
     nostr::NostrEvent,
@@ -23,11 +27,17 @@ pub use spaces_wallet::{
         BidEventDetails, BidoutEventDetails, OpenEventDetails, SendEventDetails, TxEvent,
         TxEventKind,
     },
+    Balance, Listing,
 };
 
-#[derive(Debug)]
+use akrond::{runner::ServiceKind, Akron};
+
+use crate::ConfigBackend;
+
+#[derive(Debug, Clone)]
 pub struct Client {
     client: HttpClient,
+    shutdown: Option<tokio::sync::broadcast::Sender<()>>,
 }
 
 pub type ClientResult<T> = Result<T, String>;
@@ -53,11 +63,127 @@ fn map_wallet_result<T>((label, result): (String, Result<T, ClientError>)) -> Wa
 }
 
 impl Client {
-    pub fn new(rpc_url: &str) -> Result<Self, String> {
+    pub async fn create(
+        data_dir: std::path::PathBuf,
+        mut backend_config: ConfigBackend,
+    ) -> Result<(Self, ConfigBackend), String> {
+        let (spaces_rpc_url, shutdown) = match &mut backend_config {
+            ConfigBackend::Akrond {
+                network,
+                prune_point,
+            } => {
+                let (akron, shutdown) = Akron::create();
+                let yuki_data_dir = data_dir.join("yuki");
+                let spaces_data_dir = data_dir.join("spaces");
+                let mut yuki_args: Vec<String> = ["--data-dir", yuki_data_dir.to_str().unwrap()]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
+                let spaces_args: Vec<String> = [
+                    "--bitcoin-rpc-url",
+                    "http://127.0.0.1:8225",
+                    "--data-dir",
+                    spaces_data_dir.to_str().unwrap(),
+                    "--bitcoin-rpc-light",
+                ]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+                if prune_point.is_none() {
+                    match network {
+                        ExtendedNetwork::Mainnet => {
+                            let checkpoint = akron
+                                .load_checkpoint(
+                                    "https://bitpki.com/protocol.sdb",
+                                    &spaces_data_dir.join(network.to_string()),
+                                    None,
+                                )
+                                .await
+                                .map_err(|e| e.to_string())?;
+
+                            *prune_point = Some(checkpoint.block);
+                        }
+                        ExtendedNetwork::Testnet4 => *prune_point = Some(ChainAnchor::TESTNET4()),
+                        _ => {}
+                    }
+                }
+                if let Some(prune_point) = prune_point {
+                    yuki_args.push("--prune-point".to_string());
+                    yuki_args.push(format!(
+                        "{}:{}",
+                        hex::encode(prune_point.hash),
+                        prune_point.height
+                    ));
+                }
+                akron
+                    .start(ServiceKind::Yuki, yuki_args)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                akron
+                    .start(
+                        ServiceKind::Spaces,
+                        spaces_args.iter().map(|s| s.to_string()).collect(),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                (
+                    format!("http://127.0.0.1:{}", default_spaces_rpc_port(network)),
+                    Some(shutdown),
+                )
+            }
+            ConfigBackend::Bitcoind {
+                network,
+                url,
+                cookie,
+                user,
+                password,
+            } => {
+                let (akron, shutdown) = Akron::create();
+                let spaces_data_dir = data_dir.join("spaces");
+                let mut spaces_args = vec![
+                    "--data-dir",
+                    spaces_data_dir.to_str().unwrap(),
+                    "--bitcoin-rpc-url",
+                    url,
+                ];
+                if !cookie.is_empty() {
+                    spaces_args.extend_from_slice(&["--bitcoin-rpc-cookie", cookie]);
+                }
+                if !user.is_empty() {
+                    spaces_args.extend_from_slice(&[
+                        "--bitcoin-rpc-user",
+                        user,
+                        "--bitcoin-rpc-password",
+                        password,
+                    ]);
+                }
+                akron
+                    .start(
+                        ServiceKind::Spaces,
+                        spaces_args.iter().map(|s| s.to_string()).collect(),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+                (
+                    format!("http://127.0.0.1:{}", default_spaces_rpc_port(&network)),
+                    Some(shutdown),
+                )
+            }
+            ConfigBackend::Spaced { url, .. } => (url.to_string(), None),
+        };
         let client = HttpClientBuilder::default()
-            .build(rpc_url)
+            .build(spaces_rpc_url)
             .map_err(|e| e.to_string())?;
-        Ok(Self { client })
+        let server_info = client.get_server_info().await.map_err(|e| e.to_string())?;
+        let network = match &backend_config {
+            ConfigBackend::Akrond { network, .. }
+            | ConfigBackend::Bitcoind { network, .. }
+            | ConfigBackend::Spaced { network, .. } => network,
+        };
+        if server_info.network != network.to_string() {
+            return Err("Wrong network".to_string());
+        }
+        Ok((Self { client, shutdown }, backend_config))
     }
 
     pub fn get_server_info(&self) -> Task<ClientResult<ServerInfo>> {
@@ -463,5 +589,13 @@ impl Client {
             },
             map_wallet_result,
         )
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        if let Some(shutdown) = self.shutdown.as_ref() {
+            let _ = shutdown.send(());
+        }
     }
 }

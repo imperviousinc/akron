@@ -1,24 +1,25 @@
 use iced::{
-    Center, Element, Task,
     widget::{button, column, container, horizontal_space, row},
+    Center, Element, Task,
 };
 
 use spaces_client::config::ExtendedNetwork;
 
 use crate::{
-    Config, ConfigBackend,
-    client::{Client, ClientResult, ServerInfo},
+    client::{Client, ClientResult},
     widget::{
-        form::{Form, submit_button},
-        icon::{Icon, button_icon, text_icon},
+        form::{submit_button, Form},
+        icon::{button_icon, text_icon, Icon},
         text::{error_block, text_big, text_bold},
     },
+    Config, ConfigBackend,
 };
 
 #[derive(Debug)]
 pub struct State {
     config: Config,
     client: Option<Client>,
+    connecting: bool,
     connected: bool,
     error: Option<String>,
 }
@@ -32,7 +33,7 @@ pub enum Message {
     UserInput(String),
     PasswordInput(String),
     Connect,
-    ConnectResult(ClientResult<ServerInfo>),
+    ConnectResult(Result<(Client, ConfigBackend), String>),
     ListWalletsResult(ClientResult<Vec<String>>),
     Reset,
     Disconnect,
@@ -64,6 +65,7 @@ impl State {
             Self {
                 config,
                 client: None,
+                connecting: false,
                 connected: false,
                 error: None,
             },
@@ -85,7 +87,7 @@ impl State {
             }
             Message::NetworkSelect(value) => {
                 match self.config.backend.as_mut() {
-                    Some(ConfigBackend::Embedded { network })
+                    Some(ConfigBackend::Akrond { network, .. })
                     | Some(ConfigBackend::Bitcoind { network, .. })
                     | Some(ConfigBackend::Spaced { network, .. }) => *network = value,
                     _ => unreachable!(),
@@ -121,29 +123,21 @@ impl State {
                 }
                 Action::none()
             }
-            Message::Connect => match self.config.backend.as_ref() {
-                Some(ConfigBackend::Embedded { .. }) => unimplemented!(),
-                Some(ConfigBackend::Bitcoind { .. }) => unimplemented!(),
-                Some(ConfigBackend::Spaced { url, .. }) => match Client::new(url) {
-                    Ok(client) => {
-                        let task = client.get_server_info().map(Message::ConnectResult);
+            Message::Connect => {
+                self.connecting = true;
+                let data_dir = self.config.data_dir().to_path_buf();
+                let backend_config = self.config.backend.clone().unwrap();
+                Action::Task(Task::perform(
+                    async move { Client::create(data_dir, backend_config).await },
+                    Message::ConnectResult,
+                ))
+            }
+            Message::ConnectResult(result) => {
+                self.connecting = false;
+                match result {
+                    Ok((client, backend_config)) => {
                         self.client = Some(client);
-                        Action::Task(task)
-                    }
-                    Err(err) => Action::Task(Task::done(Message::ConnectResult(Err(err)))),
-                },
-                _ => unreachable!(),
-            },
-            Message::ConnectResult(result) => match result {
-                Ok(info) => {
-                    let network = match self.config.backend.as_ref() {
-                        Some(ConfigBackend::Embedded { network, .. })
-                        | Some(ConfigBackend::Bitcoind { network, .. })
-                        | Some(ConfigBackend::Spaced { network, .. }) => network,
-                        _ => unreachable!(),
-                    };
-                    if info.network == network.to_string() {
-                        self.config.wallet = None;
+                        self.config.backend = Some(backend_config);
                         Action::Task(
                             self.client
                                 .as_ref()
@@ -151,18 +145,13 @@ impl State {
                                 .list_wallets()
                                 .map(Message::ListWalletsResult),
                         )
-                    } else {
-                        self.client = None;
-                        self.error = Some("Wrong network".to_string());
+                    }
+                    Err(err) => {
+                        self.error = Some(err);
                         Action::none()
                     }
                 }
-                Err(err) => {
-                    self.client = None;
-                    self.error = Some(err);
-                    Action::none()
-                }
-            },
+            }
             Message::ListWalletsResult(result) => match result {
                 Ok(wallets) => {
                     if wallets.is_empty() {
@@ -248,19 +237,21 @@ impl State {
                 row![
                     column![
                         text_icon(Icon::Assembly).size(150),
-                        text_bold("Use embedded light bitcoin node"),
+                        text_bold("Compact sync"),
                         submit_button(
                             "Continue",
-                            Some(Message::BackendSet(ConfigBackend::Embedded {
-                                network: ExtendedNetwork::Mainnet
+                            Some(Message::BackendSet(ConfigBackend::Akrond {
+                                network: ExtendedNetwork::Mainnet,
+                                prune_point: None,
                             }))
                         ),
                     ]
                     .align_x(Center)
                     .spacing(30),
+                    horizontal_space(),
                     column![
                         text_icon(Icon::CurrencyBitcoin).size(150),
-                        text_bold("Connect your own bitcoind"),
+                        text_bold("Custom bitcoind"),
                         submit_button(
                             "Continue",
                             Some(Message::BackendSet(ConfigBackend::Bitcoind {
@@ -274,9 +265,10 @@ impl State {
                     ]
                     .align_x(Center)
                     .spacing(30),
+                    horizontal_space(),
                     column![
                         text_icon(Icon::At).size(150),
-                        text_bold("Connect your own spaced"),
+                        text_bold("Custom spaced"),
                         submit_button(
                             "Continue",
                             Some(Message::BackendSet(ConfigBackend::Spaced {
@@ -288,7 +280,6 @@ impl State {
                     .align_x(Center)
                     .spacing(30),
                 ]
-                .spacing(200),
             ]
             .spacing(10)
         } else if !self.connected {
@@ -308,9 +299,9 @@ impl State {
                         ExtendedNetwork::Regtest,
                     ];
                     match self.config.backend.as_ref().unwrap() {
-                        ConfigBackend::Embedded { network } => Form::new(
+                        ConfigBackend::Akrond { network, .. } => Form::new(
                             "Connect",
-                            if self.client.is_none() {
+                            if !self.connecting {
                                 Some(Message::Connect)
                             } else {
                                 None
@@ -325,7 +316,7 @@ impl State {
                             password,
                         } => Form::new(
                             "Connect",
-                            if self.client.is_none() && !url.is_empty() {
+                            if !self.connecting && !url.is_empty() {
                                 Some(Message::Connect)
                             } else {
                                 None
@@ -348,7 +339,7 @@ impl State {
                         ),
                         ConfigBackend::Spaced { network, url } => Form::new(
                             "Connect",
-                            if self.client.is_none() && !url.is_empty() {
+                            if !self.connecting && !url.is_empty() {
                                 Some(Message::Connect)
                             } else {
                                 None
