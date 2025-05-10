@@ -20,6 +20,7 @@ use tokio::io::AsyncWriteExt;
 pub mod runner;
 pub mod services;
 
+#[derive(Debug)]
 pub struct Akron {
     stream_tx: mpsc::Sender<AkronCommand>,
 }
