@@ -4606,7 +4606,7 @@ dependencies = [
 [[package]]
 name = "spaces_client"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
+source = "git+https://github.com/spacesprotocol/spaces.git#23282f9b423b06367774c43b9a6d807eff14508f"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
+source = "git+https://github.com/spacesprotocol/spaces.git#23282f9b423b06367774c43b9a6d807eff14508f"
 dependencies = [
  "bincode",
  "bitcoin",
@@ -4647,7 +4647,7 @@ dependencies = [
 [[package]]
 name = "spaces_wallet"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#cb4d0f5b31d788b70930c2dcd532bec903c6e6eb"
+source = "git+https://github.com/spacesprotocol/spaces.git#23282f9b423b06367774c43b9a6d807eff14508f"
 dependencies = [
  "anyhow",
  "bdk_wallet",
@@ -5626,7 +5626,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -5654,7 +5654,7 @@ dependencies = [
  "log",
  "naga",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "rustc-hash 1.1.0",
@@ -5696,7 +5696,7 @@ dependencies = [
  "ndk-sys 0.5.0+25.2.9519653",
  "objc",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc",
  "raw-window-handle",
