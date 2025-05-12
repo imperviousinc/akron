@@ -84,6 +84,7 @@ dependencies = [
  "futures-util",
  "hex",
  "log",
+ "regex",
  "reqwest",
  "spaces_client",
  "tokio",
