@@ -1,6 +1,6 @@
 use iced::widget::qr_code::Data as QrCode;
 
-use spaces_client::wallets::{TxInfo, WalletInfoWithProgress, WalletProgressUpdate};
+use spaces_client::wallets::{TxInfo, WalletInfoWithProgress, WalletStatus};
 use spaces_protocol::{Covenant, FullSpaceOut, slabel::SLabel};
 use spaces_wallet::bitcoin::{Amount, OutPoint};
 
@@ -73,24 +73,28 @@ impl WalletEntry<'_> {
         self.state
             .info
             .as_ref()
-            .is_some_and(|info| matches!(info.status, WalletProgressUpdate::Complete))
+            .is_some_and(|info|
+                matches!(info.sync.status, WalletStatus::Complete))
     }
 
     pub fn sync_status_string(&self) -> &'static str {
         if let Some(info) = self.state.info.as_ref() {
-            match info.status {
-                WalletProgressUpdate::SourceSync { .. } => "Source syncing",
-                WalletProgressUpdate::CbfFilterSync { .. } => "Filters syncing",
-                WalletProgressUpdate::CbfProcessFilters { .. } => "Processing filters",
-                WalletProgressUpdate::CbfDownloadMatchingBlocks { .. } => {
+            match info.sync.status {
+                WalletStatus::HeadersSync => "Syncing block headers",
+                WalletStatus::ChainSync  => "Syncing chain",
+                WalletStatus::SpacesSync => "Syncing spaces",
+                WalletStatus::CbfFilterSync => "Syncing filters",
+                WalletStatus::CbfProcessFilters => "Processing filters",
+                WalletStatus::CbfDownloadMatchingBlocks => {
                     "Downloading matching blocks"
                 }
-                WalletProgressUpdate::CbfProcessMatchingBlocks { .. } => {
+                WalletStatus::CbfProcessMatchingBlocks => {
                     "Processing matching blocks"
                 }
-                WalletProgressUpdate::Syncing => "Syncing",
-                WalletProgressUpdate::CbfApplyUpdate => "Applying compact filters update",
-                WalletProgressUpdate::Complete => "Synced",
+                WalletStatus::Syncing => "Syncing",
+                WalletStatus::CbfApplyUpdate => "Applying compact filters update",
+                WalletStatus::Complete => "Synced",
+
             }
         } else {
             "Loading"
@@ -98,22 +102,9 @@ impl WalletEntry<'_> {
     }
 
     pub fn sync_status_percentage(&self) -> f32 {
-        if let Some(info) = self.state.info.as_ref() {
-            match info.status {
-                WalletProgressUpdate::SourceSync { total, completed }
-                | WalletProgressUpdate::CbfFilterSync { total, completed }
-                | WalletProgressUpdate::CbfProcessFilters { total, completed }
-                | WalletProgressUpdate::CbfDownloadMatchingBlocks { total, completed }
-                | WalletProgressUpdate::CbfProcessMatchingBlocks { total, completed } => {
-                    completed as f32 / total as f32
-                }
-                WalletProgressUpdate::Syncing => info.info.progress,
-                WalletProgressUpdate::CbfApplyUpdate => 0.0,
-                WalletProgressUpdate::Complete => 1.0,
-            }
-        } else {
-            0.0
-        }
+        self.state.info.as_ref()
+            .map(|info| info.sync.progress.unwrap_or(0.0))
+            .unwrap_or(0.0)
     }
 }
 
