@@ -40,6 +40,7 @@ use crate::ConfigBackend;
 pub struct Client {
     client: HttpClient,
     shutdown: Option<tokio::sync::broadcast::Sender<()>>,
+    pub logs: Option<tokio::sync::broadcast::Sender<String>>,
 }
 
 pub type ClientResult<T> = Result<T, String>;
@@ -69,12 +70,14 @@ impl Client {
         data_dir: std::path::PathBuf,
         mut backend_config: ConfigBackend,
     ) -> Result<(Self, ConfigBackend), String> {
+        let mut logs = None;
         let (spaces_rpc_url, shutdown) = match &mut backend_config {
             ConfigBackend::Akrond {
                 network,
                 prune_point,
             } => {
                 let (akron, shutdown) = Akron::create();
+                logs = Some(akron.subscribe_logs());
                 let yuki_data_dir = data_dir.join("yuki");
                 let spaces_data_dir = data_dir.join("spaces");
                 let mut yuki_args: Vec<String> = [
@@ -151,6 +154,7 @@ impl Client {
                 password,
             } => {
                 let (akron, shutdown) = Akron::create();
+                logs = Some(akron.subscribe_logs());
                 let spaces_data_dir = data_dir.join("spaces");
                 let network_string = network.to_string();
                 let mut spaces_args = vec![
@@ -221,7 +225,7 @@ impl Client {
                 return Err(e.to_string());
             }
         }
-        Ok((Self { client, shutdown }, backend_config))
+        Ok((Self { client, shutdown, logs }, backend_config))
     }
 
     pub fn get_server_info(&self) -> Task<ClientResult<ServerInfo>> {

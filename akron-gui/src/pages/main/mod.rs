@@ -7,15 +7,15 @@ mod sign;
 mod spaces;
 mod state;
 
-use iced::{
-    clipboard, time,
-    widget::{
-        button, center, column, container, progress_bar, row, text, vertical_rule, vertical_space,
-        Column, Stack,
-    },
-    Center, Element, Fill, Subscription, Task, Theme,
-};
+use std::collections::VecDeque;
+use std::time::Duration;
+use iced::{clipboard, time, widget::{
+    button, center, column, container, progress_bar, row, text, vertical_rule, vertical_space,
+    Column, Stack,
+}, Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme};
 
+use iced::widget::{horizontal_rule, scrollable};
+use iced::widget::button::Status;
 use crate::{
     client::*,
     widget::{
@@ -24,6 +24,7 @@ use crate::{
     },
     Config,
 };
+use crate::widget::text::text_small;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
@@ -35,6 +36,9 @@ enum Screen {
     Sign,
     Settings,
 }
+
+const EXPANDED_LOGS_HEIGHT : u16 = 280;
+const MAX_LOGS_BUFFER : usize = 50;
 
 #[derive(Debug)]
 pub struct State {
@@ -51,6 +55,9 @@ pub struct State {
     market_screen: market::State,
     sign_screen: sign::State,
     settings_screen: settings::State,
+    logs_rx: Option<tokio::sync::broadcast::Receiver<String>>,
+    log_buffer: VecDeque<String>,
+    logs_height: u16,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +75,8 @@ pub enum Route {
 #[derive(Debug, Clone)]
 pub enum Message {
     Tick,
+    ToggleLogs,
+    DrainLogs,
     NavigateTo(Route),
     ServerInfo(ClientResult<ServerInfo>),
     ListWallets(ClientResult<Vec<String>>),
@@ -94,6 +103,9 @@ pub enum Action {
 
 impl State {
     pub fn run(config: Config, client: Client) -> (Self, Task<Message>) {
+        let logs_rx = client.logs
+            .as_ref().map(|l| l.subscribe());
+
         let state = Self {
             config,
             client,
@@ -108,6 +120,9 @@ impl State {
             market_screen: Default::default(),
             sign_screen: Default::default(),
             settings_screen: Default::default(),
+            logs_rx,
+            log_buffer: VecDeque::new(),
+            logs_height: 0,
         };
         let task = Task::batch([state.get_server_info(), state.list_wallets()]);
         (state, task)
@@ -237,6 +252,17 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         match message {
+            Message::DrainLogs => {
+                if let Some(rx) = self.logs_rx.as_mut() {
+                    while let Ok(log_msg) = rx.try_recv() {
+                        if self.log_buffer.len() >= MAX_LOGS_BUFFER {
+                            self.log_buffer.pop_front();
+                        }
+                        self.log_buffer.push_back(log_msg);
+                    }
+                }
+                Action::Task(Task::none())
+            },
             Message::Tick => {
                 let mut tasks = vec![self.get_server_info(), self.get_wallet_info()];
                 match self.screen {
@@ -642,6 +668,14 @@ impl State {
                 }
                 settings::Action::None => Action::Task(Task::none()),
             },
+            Message::ToggleLogs => {
+                if self.logs_height == 0 {
+                    self.logs_height = EXPANDED_LOGS_HEIGHT;
+                } else {
+                    self.logs_height = 0;
+                }
+                Action::Task(Task::none())
+            }
         }
     }
 
@@ -777,17 +811,124 @@ impl State {
                         .map(Message::SettingsScreen),
                 })
             ])
+            .push_maybe(self.logs_view())
             .into()
+
+    }
+
+    pub fn logs_view(&self) -> Option<Element<Message>> {
+        if self.log_buffer.is_empty() {
+            return None;
+        }
+
+        let logs_expanded = self.logs_height != 0;
+        let toggle_txt = if logs_expanded {
+            "▾"
+        } else {
+            "▸"
+        };
+        let toggle_btn = button(text(toggle_txt).size(26))
+            .padding([0, 10])
+            .style(|theme : &Theme, s| {
+                let palette = theme.extended_palette();
+
+                let bg = match s {
+                    Status::Active   => Color::TRANSPARENT.into(),
+                    _ => palette.secondary.strong.color.into(),
+                };
+
+                button::Style {
+                    background: Some(bg),
+                    text_color: Color::BLACK.into(),
+                    border: Default::default(),
+                    shadow: Default::default(),
+                }
+            })
+            .on_press(Message::ToggleLogs);
+
+
+        let (log_header, logs) = if logs_expanded {
+            (text_small("Status: "), Some(container(
+                scrollable(
+                    column(
+                        self.log_buffer
+                            .iter()
+                            .map(|line|
+                                text_small(line.clone())
+                                    .color(Color::BLACK)
+                                    .font(Font::MONOSPACE)
+                                    .into()
+                            )
+                            .collect::<Vec<_>>()
+                    )
+                )
+                    .width(Fill)
+                    .height(Fill)
+                    .anchor_bottom()
+            )
+                .padding(Padding {
+                    top: 0.0,
+                    right: 10.0,
+                    bottom: 10.0,
+                    left: 10.0,
+                })
+                .height(self.logs_height)
+                .width(Fill)))
+        } else {
+            (text_small(
+                self.log_buffer
+                    .back()
+                    .map(|s| s.to_string()).unwrap_or("".to_string())
+
+                ),
+            None
+            )
+        };
+
+        let logs_style = move |theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                text_color: None,
+                background: if !logs_expanded { Some(palette.background.weak.color.into()) } else { None },
+                border: Default::default(),
+                shadow: Default::default(),
+            }
+        };
+
+        let status_row = row![
+            log_header, iced::widget::Space::with_width(Fill), toggle_btn,
+        ].padding(Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+            left: 10.0,
+        }).align_y(Center);
+
+        let view = container(column![
+            horizontal_rule(3),
+            status_row,
+        ]
+            .push_maybe(logs)
+            .push(horizontal_rule(3))
+            .width(Fill))
+            .width(Fill)
+            .style(logs_style);
+
+        Some(view.into())
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        time::every(
+        let ticks = time::every(
             if self.tip_height != 0 && self.wallets.get_current().is_some_and(|w| w.is_synced()) {
                 time::Duration::from_secs(30)
             } else {
                 time::Duration::from_secs(2)
             },
         )
-        .map(|_| Message::Tick)
+        .map(|_| Message::Tick);
+
+        let logs = time::every(Duration::from_millis(200))
+            .map(|_| Message::DrainLogs);
+        Subscription::batch([ticks, logs])
     }
 }
