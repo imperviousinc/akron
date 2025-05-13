@@ -217,11 +217,29 @@ impl Client {
             .build(spaces_rpc_url)
             .map_err(|e| e.to_string())?;
         let mut server_info_result = client.get_server_info().await;
-        let mut attempts = 1;
-        while server_info_result.is_err() && attempts != 5 {
+        let mut failed_attempts = 0;
+        while failed_attempts < 5 {
             server_info_result = client.get_server_info().await;
+            if let Ok(server_info) = server_info_result.as_ref() {
+                if server_info.chain.headers
+                    >= (match &backend_config {
+                        ConfigBackend::Akrond { prune_point, .. } => {
+                            prune_point.map_or(0, |p| p.height)
+                        }
+                        ConfigBackend::Bitcoind { network, .. }
+                        | ConfigBackend::Spaced { network, .. } => match network {
+                            ExtendedNetwork::Mainnet => ChainAnchor::MAINNET().height,
+                            ExtendedNetwork::Testnet4 => ChainAnchor::TESTNET4().height,
+                            _ => 0,
+                        },
+                    })
+                {
+                    break;
+                }
+            } else {
+                failed_attempts += 1;
+            }
             let _ = tokio::time::sleep(Duration::from_secs(1)).await;
-            attempts += 1;
         }
         match server_info_result {
             Ok(server_info) => {
@@ -245,7 +263,14 @@ impl Client {
                 return Err(e.to_string());
             }
         }
-        Ok((Self { client, shutdown, logs }, backend_config))
+        Ok((
+            Self {
+                client,
+                shutdown,
+                logs,
+            },
+            backend_config,
+        ))
     }
 
     pub fn get_server_info(&self) -> Task<ClientResult<ServerInfo>> {
