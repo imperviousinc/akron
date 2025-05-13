@@ -23,7 +23,7 @@ pub mod services;
 #[derive(Debug)]
 pub struct Akron {
     stream_tx: mpsc::Sender<AkronCommand>,
-    log_tx: broadcast::Sender<String>,
+    log_tx: Option<broadcast::Sender<String>>,
 }
 
 pub struct CheckpointProgress {
@@ -52,10 +52,14 @@ struct Service {
 
 
 impl Akron {
-    pub fn create() -> (Self, broadcast::Sender<()>) {
+    pub fn create(capture_logs: bool) -> (Self, broadcast::Sender<()>) {
         let (stream_tx, rx) = mpsc::channel::<AkronCommand>(20);
         let shutdown = broadcast::Sender::new(20);
-        let log_tx = broadcast::Sender::new(5000);
+        let log_tx = if capture_logs {
+            Some(broadcast::Sender::new(5000))
+        } else {
+            None
+        };
 
         let task_shutdown = shutdown.clone();
         let err_shutdown = shutdown.clone();
@@ -77,7 +81,7 @@ impl Akron {
         (Self { stream_tx, log_tx }, shutdown)
     }
 
-    pub fn subscribe_logs(&self) -> broadcast::Sender<String> {
+    pub fn subscribe_logs(&self) -> Option<broadcast::Sender<String>> {
         self.log_tx.clone()
     }
 
@@ -123,7 +127,7 @@ impl Akron {
             downloaded += chunk.len() as u64;
 
             if let Some(progress) = progress.as_mut() {
-                _ =  progress.send(CheckpointProgress { downloaded, total }).await;
+                _ = progress.send(CheckpointProgress { downloaded, total }).await;
             }
         }
 
@@ -132,7 +136,7 @@ impl Akron {
         let root_anchor = tokio::task::spawn_blocking(move || {
             let tmp = temp_dir().join("anchors");
             let db = spaces_client::store::Store::open(spaces_path)?;
-            let mut anchors = db.update_anchors(&tmp,1)?;
+            let mut anchors = db.update_anchors(&tmp, 1)?;
             if anchors.is_empty() {
                 return Err(anyhow::anyhow!("No Anchors found"));
             }
@@ -144,12 +148,12 @@ impl Akron {
 
     pub async fn start(&self, kind: ServiceKind, args: Vec<String>) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
-         self.stream_tx.send(AkronCommand::SpawnService {
+        self.stream_tx.send(AkronCommand::SpawnService {
             kind,
             args,
             oneshot: tx,
         }).await.map_err(|e|
-             anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?;
+            anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?;
         rx.await
             .map_err(|e| anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?
     }
@@ -167,7 +171,7 @@ impl Akron {
 
     async fn handle_services(mut rx: mpsc::Receiver<AkronCommand>,
                              shutdown: broadcast::Sender<()>,
-                             logs_tx: broadcast::Sender<String>) -> anyhow::Result<()> {
+                             logs_tx: Option<broadcast::Sender<String>>) -> anyhow::Result<()> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("Failed to bind TCP listener")?;
@@ -200,7 +204,7 @@ impl Akron {
         listener: &TcpListener,
         services: &mut Vec<Service>,
         cmd: AkronCommand,
-        logs_tx: &broadcast::Sender<String>,
+        logs_tx: &Option<broadcast::Sender<String>>,
     ) -> anyhow::Result<()> {
         match cmd {
             AkronCommand::SpawnService { kind, args, oneshot } => {
@@ -235,7 +239,7 @@ impl Akron {
         listener: &TcpListener,
         kind: ServiceKind,
         args: Vec<String>,
-        log_tx: broadcast::Sender<String>,
+        log_tx: Option<broadcast::Sender<String>>,
     ) -> anyhow::Result<Service> {
         let addr = listener.local_addr()?.to_string();
         let mut command = Command::new(env::args().next().context("No program name")?);
@@ -250,18 +254,27 @@ impl Akron {
             .arg(&addr)
             .args(&args);
 
-        command.stdin(Stdio::inherit())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        if log_tx.is_some() {
+            command.stdin(Stdio::inherit())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+        } else {
+            command.stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+        }
+
         let mut child = command
             .spawn()
             .context(format!("Failed to spawn child service {}", kind.as_str()))?;
 
-        let stdout = child.stdout.take().unwrap();
-        let stdout_logs = log_tx.clone();
-        tokio::spawn(async move { redirect_logs(stdout_logs, stdout).await });
-        let stderr = child.stderr.take().unwrap();
-        tokio::spawn(async move { redirect_logs(log_tx, stderr).await });
+        if let Some(log_tx) = log_tx {
+            let stdout = child.stdout.take().unwrap();
+            let stdout_logs = log_tx.clone();
+            tokio::spawn(async move { redirect_logs(stdout_logs, stdout).await });
+            let stderr = child.stderr.take().unwrap();
+            tokio::spawn(async move { redirect_logs(log_tx, stderr).await });
+        }
 
         // Accept connection from the child
         let (stream, _) = listener

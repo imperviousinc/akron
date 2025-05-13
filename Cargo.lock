@@ -4285,7 +4285,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
 dependencies = [
- "bitcoin_hashes 0.14.0",
+ "bitcoin_hashes 0.13.0",
  "rand 0.8.5",
  "secp256k1-sys",
  "serde",
@@ -4606,7 +4606,7 @@ dependencies = [
 [[package]]
 name = "spaces_client"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#a2b08e0e583b2fc5cbf7acab95abfd5050cb97f0"
+source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#a2b08e0e583b2fc5cbf7acab95abfd5050cb97f0"
+source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
 dependencies = [
  "bincode",
  "bitcoin",
@@ -4647,7 +4647,7 @@ dependencies = [
 [[package]]
 name = "spaces_wallet"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#a2b08e0e583b2fc5cbf7acab95abfd5050cb97f0"
+source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
 dependencies = [
  "anyhow",
  "bdk_wallet",
@@ -6292,7 +6292,7 @@ dependencies = [
 [[package]]
 name = "yuki"
 version = "0.0.1"
-source = "git+https://github.com/buffrr/yuki.git#d1ab9d6757a6380a6f14508b7d48c94621e5933f"
+source = "git+https://github.com/buffrr/yuki.git#14a261666b15e6cc7e6360d53153d2bf6060717a"
 dependencies = [
  "anyhow",
  "bincode",
@@ -6300,8 +6300,10 @@ dependencies = [
  "bitcoin",
  "clap",
  "env_logger",
+ "futures-util",
  "hex",
  "jsonrpsee",
+ "reqwest",
  "rusqlite",
  "serde",
  "tokio",
