@@ -71,13 +71,15 @@ impl Client {
         mut backend_config: ConfigBackend,
     ) -> Result<(Self, ConfigBackend), String> {
         let mut logs = None;
+        // TODO: move this as a command line flag --no-capture-logs (uses stdout instead)
+        const CAPTURE_LOGS : bool = true;
         let (spaces_rpc_url, shutdown) = match &mut backend_config {
             ConfigBackend::Akrond {
                 network,
                 prune_point,
             } => {
-                let (akron, shutdown) = Akron::create();
-                logs = Some(akron.subscribe_logs());
+                let (akron, shutdown) = Akron::create(CAPTURE_LOGS);
+                logs = akron.subscribe_logs();
                 let yuki_data_dir = data_dir.join("yuki");
                 let spaces_data_dir = data_dir.join("spaces");
                 let mut yuki_args: Vec<String> = [
@@ -127,6 +129,9 @@ impl Client {
                         prune_point.height
                     ));
                 }
+                yuki_args.push("--filters-endpoint".to_string());
+                yuki_args.push("https://bitpki.com/".to_string());
+
                 if let Err(e) = akron.start(ServiceKind::Yuki, yuki_args).await {
                     let _ = shutdown.send(());
                     return Err(e.to_string());
@@ -153,8 +158,8 @@ impl Client {
                 user,
                 password,
             } => {
-                let (akron, shutdown) = Akron::create();
-                logs = Some(akron.subscribe_logs());
+                let (akron, shutdown) = Akron::create(CAPTURE_LOGS);
+                logs = akron.subscribe_logs();
                 let spaces_data_dir = data_dir.join("spaces");
                 let network_string = network.to_string();
                 let mut spaces_args = vec![

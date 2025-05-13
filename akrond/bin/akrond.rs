@@ -16,7 +16,7 @@ fn main() {
         return;
     }
 
-    let (akrond, shutdown) = Akron::create();
+    let (akrond, shutdown) = Akron::create(false);
     let rt = tokio::runtime::Runtime::new()
         .expect("Failed to build tokio runtime");
     if let Err(e) = rt.block_on(async_main(akrond, shutdown)) {

@@ -103,7 +103,7 @@ impl WalletEntry<'_> {
 
     pub fn sync_status_percentage(&self) -> f32 {
         self.state.info.as_ref()
-            .map(|info| info.sync.progress.unwrap_or(0.0))
+            .map(|state| state.sync.progress.unwrap_or(state.info.progress))
             .unwrap_or(0.0)
     }
 }
