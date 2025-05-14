@@ -84,7 +84,7 @@ impl Client {
                 let spaces_data_dir = data_dir.join("spaces");
                 let mut yuki_args: Vec<String> = [
                     "--chain",
-                    &network.fallback_network().to_string(),
+                    &network.to_string(),
                     "--data-dir",
                     yuki_data_dir.to_str().unwrap(),
                 ]
