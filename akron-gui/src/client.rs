@@ -72,7 +72,7 @@ impl Client {
     ) -> Result<(Self, ConfigBackend), String> {
         let mut logs = None;
         // TODO: move this as a command line flag --no-capture-logs (uses stdout instead)
-        const CAPTURE_LOGS : bool = true;
+        const CAPTURE_LOGS: bool = true;
         let (spaces_rpc_url, shutdown) = match &mut backend_config {
             ConfigBackend::Akrond {
                 network,
@@ -221,6 +221,18 @@ impl Client {
         while failed_attempts < 5 {
             server_info_result = client.get_server_info().await;
             if let Ok(server_info) = server_info_result.as_ref() {
+                match &backend_config {
+                    ConfigBackend::Akrond { .. } => {}
+                    ConfigBackend::Bitcoind { network, .. }
+                    | ConfigBackend::Spaced { network, .. } => {
+                        if server_info.network != network.to_string() {
+                            if let Some(shutdown) = shutdown {
+                                let _ = shutdown.send(());
+                            }
+                            return Err("Wrong network".to_string());
+                        }
+                    }
+                }
                 if server_info.chain.headers
                     >= (match &backend_config {
                         ConfigBackend::Akrond { prune_point, .. } => {
@@ -241,27 +253,11 @@ impl Client {
             }
             let _ = tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        match server_info_result {
-            Ok(server_info) => {
-                match &backend_config {
-                    ConfigBackend::Akrond { .. } => {}
-                    ConfigBackend::Bitcoind { network, .. }
-                    | ConfigBackend::Spaced { network, .. } => {
-                        if server_info.network != network.to_string() {
-                            if let Some(shutdown) = shutdown {
-                                let _ = shutdown.send(());
-                            }
-                            return Err("Wrong network".to_string());
-                        }
-                    }
-                };
+        if let Err(e) = server_info_result {
+            if let Some(shutdown) = shutdown {
+                let _ = shutdown.send(());
             }
-            Err(e) => {
-                if let Some(shutdown) = shutdown {
-                    let _ = shutdown.send(());
-                }
-                return Err(e.to_string());
-            }
+            return Err(e.to_string());
         }
         Ok((
             Self {
