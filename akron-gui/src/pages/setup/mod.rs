@@ -139,13 +139,17 @@ impl State {
                     Ok((client, backend_config)) => {
                         self.client = Some(client);
                         self.config.backend = Some(backend_config);
-                        Action::Task(
-                            self.client
-                                .as_ref()
-                                .unwrap()
-                                .list_wallets()
-                                .map(Message::ListWalletsResult),
-                        )
+                        if self.config.wallet.is_none() {
+                            Action::Task(
+                                self.client
+                                    .as_ref()
+                                    .unwrap()
+                                    .list_wallets()
+                                    .map(Message::ListWalletsResult),
+                            )
+                        } else {
+                            self.finish()
+                        }
                     }
                     Err(err) => {
                         self.error = Some(err);
@@ -158,8 +162,7 @@ impl State {
                     if wallets.is_empty() {
                         Action::none()
                     } else {
-                        if self.config.wallet.is_none() && wallets.contains(&"default".to_string())
-                        {
+                        if wallets.contains(&"default".to_string()) {
                             self.config.wallet = Some("default".to_string());
                         }
                         self.finish()
