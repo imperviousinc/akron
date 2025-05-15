@@ -2,11 +2,11 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use iced::{
-    Center, Element, Fill, FillPortion, Theme,
     widget::{
-        Column, Row, Space, button, center, column, container, horizontal_rule, horizontal_space,
-        row, scrollable, text,
+        button, center, column, container, horizontal_rule, horizontal_space, row, scrollable,
+        text, Column, Row, Space,
     },
+    Center, Element, Fill, FillPortion, Theme,
 };
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
     helpers::*,
     widget::{
         form::Form,
-        icon::{Icon, button_icon, text_icon},
+        icon::{button_icon, text_icon, Icon},
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
@@ -416,7 +416,7 @@ impl State {
                                             button(
                                                 Row::new()
                                                     .push_maybe(if bumped {
-                                                        Some(text_icon(Icon::ArrowBigUpLines))
+                                                        Some(text_icon(Icon::ArrowsUpFromLine))
                                                     } else {
                                                         None
                                                     })

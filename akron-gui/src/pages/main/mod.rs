@@ -7,25 +7,28 @@ mod sign;
 mod spaces;
 mod state;
 
+use iced::{
+    clipboard, time,
+    widget::{
+        button, center, column, container, progress_bar, row, text, vertical_rule, vertical_space,
+        Column, Stack,
+    },
+    Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme,
+};
 use std::collections::VecDeque;
 use std::time::Duration;
-use iced::{clipboard, time, widget::{
-    button, center, column, container, progress_bar, row, text, vertical_rule, vertical_space,
-    Column, Stack,
-}, Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme};
 
-use iced::widget::{horizontal_rule, scrollable, stack};
-use iced::widget::button::Status;
 use crate::{
     client::*,
     widget::{
+        fee_rate::{FeeRateMessage, FeeRateSelector},
         icon::{text_icon, Icon},
-        text::text_bold,
+        text::{text_bold, text_small},
     },
     Config,
 };
-use crate::widget::fee_rate::{FeeRateMessage, FeeRateSelector};
-use crate::widget::text::text_small;
+use iced::widget::button::Status;
+use iced::widget::{horizontal_rule, scrollable, stack};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
@@ -38,8 +41,8 @@ enum Screen {
     Settings,
 }
 
-const EXPANDED_LOGS_HEIGHT : u16 = 280;
-const MAX_LOGS_BUFFER : usize = 50;
+const EXPANDED_LOGS_HEIGHT: u16 = 280;
+const MAX_LOGS_BUFFER: usize = 50;
 
 #[derive(Debug)]
 pub struct State {
@@ -61,7 +64,7 @@ pub struct State {
     logs_height: u16,
     fee_rate_selector: FeeRateSelector,
     fee_rate: Option<FeeRate>,
-    fee_rate_confirmed_message: Option<Message>
+    fee_rate_confirmed_message: Option<Message>,
 }
 
 #[derive(Debug, Clone)]
@@ -112,8 +115,7 @@ pub enum Action {
 
 impl State {
     pub fn run(config: Config, client: Client) -> (Self, Task<Message>) {
-        let logs_rx = client.logs
-            .as_ref().map(|l| l.subscribe());
+        let logs_rx = client.logs.as_ref().map(|l| l.subscribe());
 
         let state = Self {
             config,
@@ -274,7 +276,7 @@ impl State {
                     }
                 }
                 Action::Task(Task::none())
-            },
+            }
             Message::Tick => {
                 let mut tasks = vec![self.get_server_info(), self.get_wallet_info()];
                 match self.screen {
@@ -410,57 +412,42 @@ impl State {
                         txid,
                         fee_rate,
                     )
-                    .map(|r| {
-                        Message::HomeScreen(home::Message::BumpFeeResult(r.result))
-                    }),
+                    .map(|r| Message::HomeScreen(home::Message::BumpFeeResult(r.result))),
                 home::Action::None => Task::none(),
             }),
             Message::SendScreen(message) => Action::Task(match self.send_screen.update(message) {
-                send::Action::SendCoins {
-                    recipient,
-                    amount,
-                } => {
+                send::Action::SendCoins { recipient, amount } => {
                     if self.fee_rate.is_none() {
-                        self.fee_rate_confirmed_message = Some(
-                            Message::SendScreen(send::Message::SendCoinsSubmit)
-                        );
+                        self.fee_rate_confirmed_message =
+                            Some(Message::SendScreen(send::Message::SendCoinsSubmit));
                         return Action::Task(Task::done(Message::ShowFeeRateModal));
                     }
 
-                    self
-                    .client
-                    .send_coins(
-                        self.wallets.get_current().unwrap().label.clone(),
-                        recipient,
-                        amount,
-                        self.fee_rate.take(),
-                    )
-                    .map(|r| {
-                        Message::SendScreen(send::Message::ClientResult(r.result))
-                    })
-                },
-                send::Action::SendSpace {
-                    recipient,
-                    slabel,
-                } => {
+                    self.client
+                        .send_coins(
+                            self.wallets.get_current().unwrap().label.clone(),
+                            recipient,
+                            amount,
+                            self.fee_rate.take(),
+                        )
+                        .map(|r| Message::SendScreen(send::Message::ClientResult(r.result)))
+                }
+                send::Action::SendSpace { recipient, slabel } => {
                     if self.fee_rate.is_none() {
-                        self.fee_rate_confirmed_message = Some(
-                            Message::SendScreen(send::Message::SendSpaceSubmit)
-                        );
+                        self.fee_rate_confirmed_message =
+                            Some(Message::SendScreen(send::Message::SendSpaceSubmit));
                         return Action::Task(Task::done(Message::ShowFeeRateModal));
                     }
 
-                    self
-                    .client
-                    .send_space(
-                        self.wallets.get_current().unwrap().label.clone(),
-                        recipient,
-                        slabel,
-                        self.fee_rate.take(),
-                    )
-                    .map(|r| {
-                        Message::SendScreen(send::Message::ClientResult(r.result))
-                    })},
+                    self.client
+                        .send_space(
+                            self.wallets.get_current().unwrap().label.clone(),
+                            recipient,
+                            slabel,
+                            self.fee_rate.take(),
+                        )
+                        .map(|r| Message::SendScreen(send::Message::ClientResult(r.result)))
+                }
                 send::Action::ShowTransactions => self.navigate_to(Route::Home),
                 send::Action::None => Task::none(),
             }),
@@ -474,82 +461,64 @@ impl State {
                 Action::Task(match self.spaces_screen.update(message) {
                     spaces::Action::WriteClipboard(s) => clipboard::write(s),
                     spaces::Action::GetSpaceInfo { slabel } => self.get_space_info(slabel),
-                    spaces::Action::OpenSpace {
-                        slabel,
-                        amount,
-                    } => {
+                    spaces::Action::OpenSpace { slabel, amount } => {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
                                 Some(Message::SpacesScreen(spaces::Message::OpenSubmit));
-                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
                         }
-                        self
-                        .client
-                        .open_space(
-                            self.wallets.get_current().unwrap().label.clone(),
-                            slabel,
-                            amount,
-                            self.fee_rate.take(),
-                        )
-                        .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        })
-                    },
-                    spaces::Action::BidSpace {
-                        slabel,
-                        amount,
-                    } => {
+                        self.client
+                            .open_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                amount,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
+                    spaces::Action::BidSpace { slabel, amount } => {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
                                 Some(Message::SpacesScreen(spaces::Message::BidSubmit));
-                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
                         }
-                        self
-                        .client
-                        .bid_space(
-                            self.wallets.get_current().unwrap().label.clone(),
-                            slabel,
-                            amount,
-                            self.fee_rate.take(),
-                        )
-                        .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        })
-                    },
+                        self.client
+                            .bid_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                amount,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
                     spaces::Action::RegisterSpace { slabel } => {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
                                 Some(Message::SpacesScreen(spaces::Message::RegisterSubmit));
-                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
                         }
-                        self
-                            .client
+                        self.client
                             .register_space(
                                 self.wallets.get_current().unwrap().label.clone(),
                                 slabel,
                                 self.fee_rate.take(),
                             )
-                            .map(|r| {
-                                Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                            })
-                    },
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
                     spaces::Action::RenewSpace { slabel } => {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
                                 Some(Message::SpacesScreen(spaces::Message::RenewSubmit));
-                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
                         }
-                        self
-                            .client
+                        self.client
                             .renew_space(
                                 self.wallets.get_current().unwrap().label.clone(),
                                 slabel,
                                 self.fee_rate.take(),
                             )
-                            .map(|r| {
-                                Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                            })
-                    },
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
                     spaces::Action::ShowTransactions => self.navigate_to(Route::Home),
                     spaces::Action::None => Task::none(),
                 })
@@ -560,18 +529,16 @@ impl State {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
                                 Some(Message::MarketScreen(market::Message::BuySubmit));
-                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
                         }
-                        self
-                            .client
+                        self.client
                             .buy_space(
                                 self.wallets.get_current().unwrap().label.clone(),
                                 listing,
                                 self.fee_rate.take(),
                             )
-                            .map(|r|
-                                Message::MarketScreen(market::Message::BuyResult(r.result)))
-                    },
+                            .map(|r| Message::MarketScreen(market::Message::BuyResult(r.result)))
+                    }
                     market::Action::Sell { slabel, price } => self
                         .client
                         .sell_space(
@@ -728,12 +695,13 @@ impl State {
                     self.logs_height = 0;
                 }
                 Action::Task(Task::none())
-            },
+            }
             // Fee rate modal
-            Message::ShowFeeRateModal => Action::Task(self
-                .fee_rate_selector
-                .update(FeeRateMessage::ShowModal)
-                .map(Message::FeeRateSelector)),
+            Message::ShowFeeRateModal => Action::Task(
+                self.fee_rate_selector
+                    .update(FeeRateMessage::ShowModal)
+                    .map(Message::FeeRateSelector),
+            ),
             Message::FeeRateSelector(msg) => {
                 let task = self.fee_rate_selector.update(msg.clone());
                 Action::Task(match msg {
@@ -748,7 +716,7 @@ impl State {
                 self.fee_rate = FeeRate::from_sat_per_vb(fee_rate as _);
 
                 if let Some(msg) = self.fee_rate_confirmed_message.take() {
-                    return Action::Task(Task::done(msg))
+                    return Action::Task(Task::done(msg));
                 }
                 Action::Task(Task::none())
             }
@@ -757,7 +725,11 @@ impl State {
 
     pub fn view(&self) -> Element<Message> {
         let content = self.main_view();
-        stack![content, self.fee_rate_selector.view().map(Message::FeeRateSelector)].into()
+        stack![
+            content,
+            self.fee_rate_selector.view().map(Message::FeeRateSelector)
+        ]
+        .into()
     }
 
     pub fn main_view(&self) -> Element<Message> {
@@ -798,17 +770,17 @@ impl State {
             }))
             .push(row![
                 column![
-                    navbar_button("Home", Icon::CurrencyBitcoin, Route::Home, Screen::Home,),
-                    navbar_button("Send", Icon::ArrowDownFromArc, Route::Send, Screen::Send,),
+                    navbar_button("Home", Icon::Bitcoin, Route::Home, Screen::Home,),
+                    navbar_button("Send", Icon::ArrowBigUpDash, Route::Send, Screen::Send,),
                     navbar_button(
                         "Receive",
-                        Icon::ArrowDownToArc,
+                        Icon::ArrowBigDownDash,
                         Route::Receive,
                         Screen::Receive,
                     ),
-                    navbar_button("Spaces", Icon::At, Route::Spaces, Screen::Spaces,),
-                    navbar_button("Market", Icon::BuildingBank, Route::Market, Screen::Market,),
-                    navbar_button("Sign", Icon::Signature, Route::Sign, Screen::Sign,),
+                    navbar_button("Spaces", Icon::AtSign, Route::Spaces, Screen::Spaces,),
+                    navbar_button("Market", Icon::Store, Route::Market, Screen::Market,),
+                    navbar_button("Sign", Icon::UserRoundPen, Route::Sign, Screen::Sign,),
                     vertical_space(),
                     navbar_button(
                         "Settings",
@@ -894,7 +866,6 @@ impl State {
             ])
             .push_maybe(self.logs_view())
             .into()
-
     }
 
     pub fn logs_view(&self) -> Option<Element<Message>> {
@@ -903,66 +874,69 @@ impl State {
         }
 
         let logs_expanded = self.logs_height != 0;
-        let toggle_txt = if logs_expanded {
-            "▾"
+        let toggle_icon = if logs_expanded {
+            text_icon(Icon::ChevronDown)
         } else {
-            "▸"
+            text_icon(Icon::ChevronRight)
         };
-        let toggle_btn = button(text(toggle_txt).size(26))
+        let toggle_btn = button(toggle_icon.size(26))
             .padding([0, 10])
-            .style(|theme : &Theme, s| {
+            .style(|theme: &Theme, s| {
                 let palette = theme.extended_palette();
 
                 let bg = match s {
-                    Status::Active   => Color::TRANSPARENT.into(),
+                    Status::Active => Color::TRANSPARENT.into(),
                     _ => palette.secondary.strong.color.into(),
                 };
 
                 button::Style {
                     background: Some(bg),
-                    text_color: Color::BLACK.into(),
+                    text_color: Color::BLACK,
                     border: Default::default(),
                     shadow: Default::default(),
                 }
             })
             .on_press(Message::ToggleLogs);
 
-
         let (log_header, logs) = if logs_expanded {
-            (text_small("Status: "), Some(container(
-                scrollable(
-                    column(
-                        self.log_buffer
-                            .iter()
-                            .map(|line|
-                                text_small(line.clone())
-                                    .color(Color::BLACK)
-                                    .font(Font::MONOSPACE)
-                                    .into()
-                            )
-                            .collect::<Vec<_>>()
+            (
+                text_small("Status: "),
+                Some(
+                    container(
+                        scrollable(column(
+                            self.log_buffer
+                                .iter()
+                                .map(|line| {
+                                    text_small(line.clone())
+                                        .color(Color::BLACK)
+                                        .font(Font::MONOSPACE)
+                                        .into()
+                                })
+                                .collect::<Vec<_>>(),
+                        ))
+                        .width(Fill)
+                        .height(Fill)
+                        .anchor_bottom(),
                     )
-                )
-                    .width(Fill)
-                    .height(Fill)
-                    .anchor_bottom()
-            )
-                .padding(Padding {
-                    top: 0.0,
-                    right: 10.0,
-                    bottom: 10.0,
-                    left: 10.0,
-                })
-                .height(self.logs_height)
-                .width(Fill)))
-        } else {
-            (text_small(
-                self.log_buffer
-                    .back()
-                    .map(|s| s.to_string()).unwrap_or("".to_string())
-
+                    .padding(Padding {
+                        top: 0.0,
+                        right: 10.0,
+                        bottom: 10.0,
+                        left: 10.0,
+                    })
+                    .height(self.logs_height)
+                    .width(Fill),
                 ),
-            None
+            )
+        } else {
+            (
+                text_small(
+                    self.log_buffer
+                        .back()
+                        .map(|s| s.to_string())
+                        .unwrap_or("".to_string()),
+                ),
+                None,
             )
         };
 
@@ -970,30 +944,37 @@ impl State {
             let palette = theme.extended_palette();
             container::Style {
                 text_color: None,
-                background: if !logs_expanded { Some(palette.background.weak.color.into()) } else { None },
+                background: if !logs_expanded {
+                    Some(palette.background.weak.color.into())
+                } else {
+                    None
+                },
                 border: Default::default(),
                 shadow: Default::default(),
             }
         };
 
         let status_row = row![
-            log_header, iced::widget::Space::with_width(Fill), toggle_btn,
-        ].padding(Padding {
+            log_header,
+            iced::widget::Space::with_width(Fill),
+            toggle_btn,
+        ]
+        .padding(Padding {
             top: 0.0,
             right: 0.0,
             bottom: 0.0,
             left: 10.0,
-        }).align_y(Center);
+        })
+        .align_y(Center);
 
-        let view = container(column![
-            horizontal_rule(3),
-            status_row,
-        ]
-            .push_maybe(logs)
-            .push(horizontal_rule(3))
-            .width(Fill))
-            .width(Fill)
-            .style(logs_style);
+        let view = container(
+            column![horizontal_rule(3), status_row,]
+                .push_maybe(logs)
+                .push(horizontal_rule(3))
+                .width(Fill),
+        )
+        .width(Fill)
+        .style(logs_style);
 
         Some(view.into())
     }
@@ -1008,10 +989,10 @@ impl State {
         )
         .map(|_| Message::Tick);
 
-        let logs = time::every(Duration::from_millis(200))
-            .map(|_| Message::DrainLogs);
+        let logs = time::every(Duration::from_millis(200)).map(|_| Message::DrainLogs);
 
-        let fee_rate = self.fee_rate_selector
+        let fee_rate = self
+            .fee_rate_selector
             .subscription()
             .map(Message::FeeRateSelector);
 

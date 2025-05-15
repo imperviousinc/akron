@@ -1,24 +1,25 @@
 use iced::{
-    Center, Element, Fill, font,
+    font,
     widget::{
-        Column, Row, Space, button, center, column, container, horizontal_rule, row, scrollable,
-        text,
+        button, center, column, container, horizontal_rule, row, scrollable, text, Column, Row,
+        Space,
     },
+    Center, Element, Fill,
 };
 
 use super::state::SpacesCollection;
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 use crate::{
     client::*,
     helpers::*,
     widget::{
-        form::{Form, text_input},
-        icon::{Icon, button_icon, text_icon, text_input_icon},
+        form::{text_input, Form},
+        icon::{button_icon, text_icon, text_input_icon, Icon},
         rect,
         tabs::TabsRow,
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
-use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Filter {
@@ -34,7 +35,7 @@ pub struct State {
     filter: Filter,
     amount: String,
     error: Option<String>,
-    tx_result: Option<TxResultWidget>
+    tx_result: Option<TxResultWidget>,
 }
 
 #[derive(Debug, Clone)]
@@ -215,11 +216,11 @@ impl State {
             column![
                 text_big("Open space"),
                 error_block(self.error.as_ref()),
-                 if let Some(tx_widget) = &self.tx_result {
+                if let Some(tx_widget) = &self.tx_result {
                     tx_widget.view().map(Message::TxResult)
-                 } else {
+                } else {
                     text("").into()
-                 },
+                },
                 self.open_form(),
             ]
             .spacing(10),
@@ -560,7 +561,7 @@ impl State {
                     .push(
                         container(
                             text_input("space", &self.search)
-                                .icon(text_input_icon(Icon::At, None, 10.0))
+                                .icon(text_input_icon(Icon::AtSign, None, 10.0))
                                 .on_input(Message::SearchInput)
                                 .font(font::Font::MONOSPACE)
                                 .size(20)
@@ -610,8 +611,8 @@ impl State {
 mod timeline {
     use crate::widget::rect::*;
     use iced::{
+        widget::{text, Column, Row},
         Border, Center, Element, Fill, Theme,
-        widget::{Column, Row, text},
     };
 
     const CIRCLE_RADIUS: f32 = 20.0;

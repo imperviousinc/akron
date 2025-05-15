@@ -1,10 +1,15 @@
+use crate::widget::{
+    form::text_input,
+    icon::{text_icon, Icon},
+};
 use iced::event::{self, Event};
-use iced::{border, font, keyboard, widget, Fill, Padding, Shrink, Theme};
 use iced::keyboard::key;
-use iced::widget::{button, center, column, container, mouse_area, opaque, row, stack, text, Space, Text};
+use iced::widget::{
+    button, center, column, container, mouse_area, opaque, row, stack, text, Space, Text,
+};
+use iced::{border, font, keyboard, widget, Fill, Padding, Shrink, Theme};
 use iced::{Color, Element, Subscription, Task};
 use serde::Deserialize;
-use crate::widget::form::text_input;
 
 #[derive(Default, Debug)]
 pub struct FeeRateSelector {
@@ -55,12 +60,7 @@ pub enum FeeRateOption {
 }
 
 impl FeeRateOption {
-    pub const ALL: &'static [Self] = &[
-        Self::Fastest,
-        Self::HalfHour,
-        Self::Hour,
-        Self::Custom,
-    ];
+    pub const ALL: &'static [Self] = &[Self::Fastest, Self::HalfHour, Self::Hour, Self::Custom];
 
     fn label(&self) -> &'static str {
         match self {
@@ -80,10 +80,16 @@ impl FeeRateOption {
         }
     }
 
-    fn display_value(&self, fee_rates: Option<&FeeRates>, fee_fetch_state: &FeeFetchState) -> String {
+    fn display_value(
+        &self,
+        fee_rates: Option<&FeeRates>,
+        fee_fetch_state: &FeeFetchState,
+    ) -> String {
         match (self, fee_rates, fee_fetch_state) {
             (Self::Custom, _, _) => "Custom".to_string(),
-            (_, Some(fee_rates), FeeFetchState::Idle) => format!("{} sat/vB", self.fee_rate(fee_rates)),
+            (_, Some(fee_rates), FeeFetchState::Idle) => {
+                format!("{} sat/vB", self.fee_rate(fee_rates))
+            }
             _ => "--".to_string(),
         }
     }
@@ -135,10 +141,10 @@ impl FeeRateSelector {
             }
             FeeRateMessage::Event(event) => match event {
                 Event::Keyboard(keyboard::Event::KeyPressed {
-                                    key: keyboard::Key::Named(key::Named::Tab),
-                                    modifiers,
-                                    ..
-                                }) => {
+                    key: keyboard::Key::Named(key::Named::Tab),
+                    modifiers,
+                    ..
+                }) => {
                     if modifiers.shift() {
                         widget::focus_previous()
                     } else {
@@ -146,9 +152,9 @@ impl FeeRateSelector {
                     }
                 }
                 Event::Keyboard(keyboard::Event::KeyPressed {
-                                    key: keyboard::Key::Named(key::Named::Escape),
-                                    ..
-                                }) => {
+                    key: keyboard::Key::Named(key::Named::Escape),
+                    ..
+                }) => {
                     self.show_modal = false;
                     self.custom_fee_rate.clear();
                     self.selected_option = Some(FeeRateOption::Fastest);
@@ -178,7 +184,9 @@ impl FeeRateSelector {
                 self.selected_option = Some(option);
                 if option == FeeRateOption::Custom {
                     self.selected_fee_rate = self.custom_fee_rate.parse().ok();
-                } else if let (Some(fee_rates), FeeFetchState::Idle) = (&self.fee_rates, &self.fee_fetch_state) {
+                } else if let (Some(fee_rates), FeeFetchState::Idle) =
+                    (&self.fee_rates, &self.fee_fetch_state)
+                {
                     self.selected_fee_rate = Some(option.fee_rate(fee_rates));
                 } else {
                     self.selected_fee_rate = None;
@@ -203,86 +211,86 @@ impl FeeRateSelector {
                     Task::none()
                 }
             }
-            FeeRateMessage::Confirmed(_) => {
-                Task::none()
-            }
+            FeeRateMessage::Confirmed(_) => Task::none(),
         }
     }
 
     pub fn view(&self) -> Element<FeeRateMessage> {
         if self.show_modal {
-            let mut fee_content = column![text("Fee rate").size(20)]
-                .padding(20)
-                .spacing(10);
+            let mut fee_content = column![text("Fee rate").size(20)].padding(20).spacing(10);
 
-            let fee_options = FeeRateOption::ALL.iter()
-                .fold(column![], |column, option| {
-                    let is_selected = self.selected_option == Some(*option);
-                    let display_value = option.display_value(self.fee_rates.as_ref(), &self.fee_fetch_state);
+            let fee_options = FeeRateOption::ALL.iter().fold(column![], |column, option| {
+                let is_selected = self.selected_option == Some(*option);
+                let display_value =
+                    option.display_value(self.fee_rates.as_ref(), &self.fee_fetch_state);
 
-                    let label = if *option == FeeRateOption::Custom {
-                        row![
-                            text("●")
-                                .style(move |theme: &Theme| {
-                                    let palette = theme.extended_palette();
-                                    text::Style {
-                                        color: if is_selected {
-                                            Some(palette.primary.strong.color)
-                                        } else {
-                                            Some(palette.background.weak.color)
-                                        },
-                                        ..text::Style::default()
-                                    }
-                                })
-                                .size(20),
-                            column![row![
-                                text(option.label().to_string()).size(16),
+                let icon = if is_selected {
+                    text_icon(Icon::CircleDot)
+                } else {
+                    text_icon(Icon::Circle)
+                };
+                let label = if *option == FeeRateOption::Custom {
+                    row![
+                        icon.style(move |theme: &Theme| {
+                            let palette = theme.extended_palette();
+                            text::Style {
+                                color: if is_selected {
+                                    Some(palette.primary.strong.color)
+                                } else {
+                                    Some(palette.background.weak.color)
+                                },
+                                ..text::Style::default()
+                            }
+                        })
+                        .size(20),
+                        column![row![
+                            text(option.label().to_string()).size(16),
+                            Space::with_width(Fill),
+                        ]
+                        .padding(Padding {
+                            top: 0.0,
+                            right: 0.0,
+                            bottom: 0.0,
+                            left: 10.0,
+                        })]
+                    ]
+                    .padding(5)
+                    .align_y(iced::Center)
+                } else {
+                    row![
+                        icon.style(move |theme: &Theme| {
+                            let palette = theme.extended_palette();
+                            text::Style {
+                                color: if is_selected {
+                                    Some(palette.primary.strong.color)
+                                } else {
+                                    Some(palette.background.weak.color)
+                                },
+                                ..text::Style::default()
+                            }
+                        })
+                        .size(20),
+                        column![
+                            row![
+                                text(option.label()).size(16),
                                 Space::with_width(Fill),
-                            ]
-                            .padding(Padding {
-                                top: 0.0,
-                                right: 0.0,
-                                bottom: 0.0,
-                                left: 10.0,
-                            })]
+                                text(display_value).size(18)
+                            ],
+                            text_light(option.description()).size(14),
                         ]
-                            .padding(5)
-                            .align_y(iced::Center)
-                    } else {
-                        row![
-                            text("●")
-                                .style(move |theme: &Theme| {
-                                    let palette = theme.extended_palette();
-                                    text::Style {
-                                        color: if is_selected {
-                                            Some(palette.primary.strong.color)
-                                        } else {
-                                            Some(palette.background.weak.color)
-                                        },
-                                        ..text::Style::default()
-                                    }
-                                })
-                                .size(20),
-                            column![
-                                row![
-                                    text(option.label()).size(16),
-                                    Space::with_width(Fill),
-                                    text(display_value).size(18)
-                                ],
-                                text_light(option.description()).size(14),
-                            ]
-                            .padding(Padding {
-                                top: 0.0,
-                                right: 0.0,
-                                bottom: 0.0,
-                                left: 10.0,
-                            })
-                        ]
-                            .align_y(iced::Center)
-                            .padding(5)
-                    };
+                        .padding(Padding {
+                            top: 0.0,
+                            right: 0.0,
+                            bottom: 0.0,
+                            left: 10.0,
+                        })
+                    ]
+                    .align_y(iced::Center)
+                    .padding(5)
+                };
 
-                    let option_container = container(label)
+                let option_container =
+                    container(label)
                         .padding(10)
                         .width(Fill)
                         .style(move |theme: &Theme| {
@@ -304,54 +312,52 @@ impl FeeRateSelector {
                             }
                         });
 
-                    column.push(
-                        mouse_area(option_container)
-                            .on_press(FeeRateMessage::SelectFeeRate(*option))
-                    )
-                });
+                column.push(
+                    mouse_area(option_container).on_press(FeeRateMessage::SelectFeeRate(*option)),
+                )
+            });
 
             fee_content = fee_content.push(fee_options.spacing(5));
 
             if matches!(self.selected_option, Some(FeeRateOption::Custom)) {
                 fee_content = fee_content.push(
-                    column![
-                        text_input("Fee rate (sat/vB)", &self.custom_fee_rate)
-                            .on_input(FeeRateMessage::CustomFeeRate)
-                            .padding(8)
-                    ]
-                        .spacing(5),
+                    column![text_input("Fee rate (sat/vB)", &self.custom_fee_rate)
+                        .on_input(FeeRateMessage::CustomFeeRate)
+                        .padding(8)]
+                    .spacing(5),
                 );
             }
 
             if matches!(self.fee_fetch_state, FeeFetchState::Failed) {
-                fee_content = fee_content.push(
-                    column![text("Could not load fee rates").size(14)]
-                        .spacing(5),
-                );
+                fee_content =
+                    fee_content.push(column![text("Could not load fee rates").size(14)].spacing(5));
             }
 
-            fee_content = fee_content.push(
-                row![
-                    button(text("cancel"))
-                     .padding([10, 20])
-        .width(Shrink)
+            fee_content = fee_content.push(row![
+                button(text("cancel"))
+                    .padding([10, 20])
+                    .width(Shrink)
                     .style(|theme: &Theme, status: button::Status| {
-                    let mut style = button::secondary(theme, status);
-                    style.border = style.border.rounded(7);
-                    style
-                }).on_press(FeeRateMessage::HideModal),Space::with_width(Fill) ,
-                button(text("Broadcast transaction")) .padding([10, 20])
-        .width(Shrink)
-                    .on_press_maybe(self.selected_fee_rate
-                        .filter(|&rate| rate > 0)
-                        .map(|_| FeeRateMessage::ConfirmFeeRate))
+                        let mut style = button::secondary(theme, status);
+                        style.border = style.border.rounded(7);
+                        style
+                    })
+                    .on_press(FeeRateMessage::HideModal),
+                Space::with_width(Fill),
+                button(text("Broadcast transaction"))
+                    .padding([10, 20])
+                    .width(Shrink)
+                    .on_press_maybe(
+                        self.selected_fee_rate
+                            .filter(|&rate| rate > 0)
+                            .map(|_| FeeRateMessage::ConfirmFeeRate)
+                    )
                     .style(|theme: &Theme, status: button::Status| {
-            let mut style = button::primary(theme, status);
-            style.border = style.border.rounded(7);
-            style
-        }),
-                ]
-            );
+                        let mut style = button::primary(theme, status);
+                        style.border = style.border.rounded(7);
+                        style
+                    }),
+            ]);
 
             let fee_modal = container(fee_content)
                 .width(400)
@@ -366,19 +372,21 @@ impl FeeRateSelector {
                 });
 
             stack![opaque(
-                mouse_area(center(opaque(fee_modal)).style(|_theme| container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.8,
-                            ..Color::BLACK
-                        }
-                        .into(),
-                    ),
-                    ..container::Style::default()
+                mouse_area(center(opaque(fee_modal)).style(|_theme| {
+                    container::Style {
+                        background: Some(
+                            Color {
+                                a: 0.8,
+                                ..Color::BLACK
+                            }
+                            .into(),
+                        ),
+                        ..container::Style::default()
+                    }
                 }))
                 .on_press(FeeRateMessage::HideModal)
             )]
-                .into()
+            .into()
         } else {
             column![].into()
         }
