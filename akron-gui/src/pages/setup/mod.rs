@@ -243,7 +243,7 @@ impl State {
                 text_big("Select backend"),
                 row![
                     column![
-                        text_icon(Icon::Assembly).size(150),
+                        text_icon(Icon::Bolt).size(150),
                         text_bold("Compact sync"),
                         submit_button(
                             "Continue",
@@ -257,7 +257,7 @@ impl State {
                     .spacing(30),
                     horizontal_space(),
                     column![
-                        text_icon(Icon::CurrencyBitcoin).size(150),
+                        text_icon(Icon::Bitcoin).size(150),
                         text_bold("Custom bitcoind"),
                         submit_button(
                             "Continue",
@@ -274,7 +274,7 @@ impl State {
                     .spacing(30),
                     horizontal_space(),
                     column![
-                        text_icon(Icon::At).size(150),
+                        text_icon(Icon::AtSign).size(150),
                         text_bold("Custom spaced"),
                         submit_button(
                             "Continue",
@@ -377,7 +377,7 @@ impl State {
                 row![
                     horizontal_space(),
                     column![
-                        text_icon(Icon::NewSection).size(150),
+                        text_icon(Icon::WalletMinimal).size(150),
                         text_bold("Create a new spaces wallet"),
                         submit_button("Continue", Some(Message::CreateWallet)),
                     ]
