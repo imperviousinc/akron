@@ -14,7 +14,7 @@ use iced::{clipboard, time, widget::{
     Column, Stack,
 }, Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme};
 
-use iced::widget::{horizontal_rule, scrollable};
+use iced::widget::{horizontal_rule, scrollable, stack};
 use iced::widget::button::Status;
 use crate::{
     client::*,
@@ -24,6 +24,7 @@ use crate::{
     },
     Config,
 };
+use crate::widget::fee_rate::{FeeRateMessage, FeeRateSelector};
 use crate::widget::text::text_small;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,9 @@ pub struct State {
     logs_rx: Option<tokio::sync::broadcast::Receiver<String>>,
     log_buffer: VecDeque<String>,
     logs_height: u16,
+    fee_rate_selector: FeeRateSelector,
+    fee_rate: Option<FeeRate>,
+    fee_rate_confirmed_message: Option<Message>
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +98,11 @@ pub enum Message {
     MarketScreen(market::Message),
     SignScreen(sign::Message),
     SettingsScreen(settings::Message),
+
+    // Fee rate modal
+    ShowFeeRateModal,
+    FeeRateSelector(FeeRateMessage),
+    FeeRateConfirmed(u32),
 }
 
 pub enum Action {
@@ -123,6 +132,9 @@ impl State {
             logs_rx,
             log_buffer: VecDeque::new(),
             logs_height: 0,
+            fee_rate_selector: Default::default(),
+            fee_rate: None,
+            fee_rate_confirmed_message: None,
         };
         let task = Task::batch([state.get_server_info(), state.list_wallets()]);
         (state, task)
@@ -399,7 +411,7 @@ impl State {
                         fee_rate,
                     )
                     .map(|r| {
-                        Message::HomeScreen(home::Message::BumpFeeResult(r.result.map(|_| ())))
+                        Message::HomeScreen(home::Message::BumpFeeResult(r.result))
                     }),
                 home::Action::None => Task::none(),
             }),
@@ -407,33 +419,48 @@ impl State {
                 send::Action::SendCoins {
                     recipient,
                     amount,
-                    fee_rate,
-                } => self
+                } => {
+                    if self.fee_rate.is_none() {
+                        self.fee_rate_confirmed_message = Some(
+                            Message::SendScreen(send::Message::SendCoinsSubmit)
+                        );
+                        return Action::Task(Task::done(Message::ShowFeeRateModal));
+                    }
+
+                    self
                     .client
                     .send_coins(
                         self.wallets.get_current().unwrap().label.clone(),
                         recipient,
                         amount,
-                        fee_rate,
+                        self.fee_rate.take(),
                     )
                     .map(|r| {
                         Message::SendScreen(send::Message::ClientResult(r.result))
-                    }),
+                    })
+                },
                 send::Action::SendSpace {
                     recipient,
                     slabel,
-                    fee_rate,
-                } => self
+                } => {
+                    if self.fee_rate.is_none() {
+                        self.fee_rate_confirmed_message = Some(
+                            Message::SendScreen(send::Message::SendSpaceSubmit)
+                        );
+                        return Action::Task(Task::done(Message::ShowFeeRateModal));
+                    }
+
+                    self
                     .client
                     .send_space(
                         self.wallets.get_current().unwrap().label.clone(),
                         recipient,
                         slabel,
-                        fee_rate,
+                        self.fee_rate.take(),
                     )
                     .map(|r| {
                         Message::SendScreen(send::Message::ClientResult(r.result))
-                    }),
+                    })},
                 send::Action::ShowTransactions => self.navigate_to(Route::Home),
                 send::Action::None => Task::none(),
             }),
@@ -450,67 +477,101 @@ impl State {
                     spaces::Action::OpenSpace {
                         slabel,
                         amount,
-                        fee_rate,
-                    } => self
+                    } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::OpenSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                        }
+                        self
                         .client
                         .open_space(
                             self.wallets.get_current().unwrap().label.clone(),
                             slabel,
                             amount,
-                            fee_rate,
+                            self.fee_rate.take(),
                         )
                         .map(|r| {
                             Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        }),
+                        })
+                    },
                     spaces::Action::BidSpace {
                         slabel,
                         amount,
-                        fee_rate,
-                    } => self
+                    } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::BidSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                        }
+                        self
                         .client
                         .bid_space(
                             self.wallets.get_current().unwrap().label.clone(),
                             slabel,
                             amount,
-                            fee_rate,
+                            self.fee_rate.take(),
                         )
                         .map(|r| {
                             Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        }),
-                    spaces::Action::RegisterSpace { slabel, fee_rate } => self
-                        .client
-                        .register_space(
-                            self.wallets.get_current().unwrap().label.clone(),
-                            slabel,
-                            fee_rate,
-                        )
-                        .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        }),
-                    spaces::Action::RenewSpace { slabel, fee_rate } => self
-                        .client
-                        .renew_space(
-                            self.wallets.get_current().unwrap().label.clone(),
-                            slabel,
-                            fee_rate,
-                        )
-                        .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
-                        }),
+                        })
+                    },
+                    spaces::Action::RegisterSpace { slabel } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::RegisterSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                        }
+                        self
+                            .client
+                            .register_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| {
+                                Message::SpacesScreen(spaces::Message::ClientResult(r.result))
+                            })
+                    },
+                    spaces::Action::RenewSpace { slabel } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::RenewSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                        }
+                        self
+                            .client
+                            .renew_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| {
+                                Message::SpacesScreen(spaces::Message::ClientResult(r.result))
+                            })
+                    },
                     spaces::Action::ShowTransactions => self.navigate_to(Route::Home),
                     spaces::Action::None => Task::none(),
                 })
             }
             Message::MarketScreen(message) => {
                 Action::Task(match self.market_screen.update(message) {
-                    market::Action::Buy { listing, fee_rate } => self
-                        .client
-                        .buy_space(
-                            self.wallets.get_current().unwrap().label.clone(),
-                            listing,
-                            fee_rate,
-                        )
-                        .map(|r| Message::MarketScreen(market::Message::BuyResult(r.result))),
+                    market::Action::Buy { listing } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::MarketScreen(market::Message::BuySubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal))
+                        }
+                        self
+                            .client
+                            .buy_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                listing,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r|
+                                Message::MarketScreen(market::Message::BuyResult(r.result)))
+                    },
                     market::Action::Sell { slabel, price } => self
                         .client
                         .sell_space(
@@ -667,11 +728,39 @@ impl State {
                     self.logs_height = 0;
                 }
                 Action::Task(Task::none())
+            },
+            // Fee rate modal
+            Message::ShowFeeRateModal => Action::Task(self
+                .fee_rate_selector
+                .update(FeeRateMessage::ShowModal)
+                .map(Message::FeeRateSelector)),
+            Message::FeeRateSelector(msg) => {
+                let task = self.fee_rate_selector.update(msg.clone());
+                Action::Task(match msg {
+                    FeeRateMessage::Confirmed(fee_rate) => Task::batch(vec![
+                        task.map(Message::FeeRateSelector),
+                        Task::done(Message::FeeRateConfirmed(fee_rate)),
+                    ]),
+                    _ => task.map(Message::FeeRateSelector),
+                })
+            }
+            Message::FeeRateConfirmed(fee_rate) => {
+                self.fee_rate = FeeRate::from_sat_per_vb(fee_rate as _);
+
+                if let Some(msg) = self.fee_rate_confirmed_message.take() {
+                    return Action::Task(Task::done(msg))
+                }
+                Action::Task(Task::none())
             }
         }
     }
 
     pub fn view(&self) -> Element<Message> {
+        let content = self.main_view();
+        stack![content, self.fee_rate_selector.view().map(Message::FeeRateSelector)].into()
+    }
+
+    pub fn main_view(&self) -> Element<Message> {
         let navbar_button = |label, icon: Icon, route: Route, screen: Screen| {
             let button = button(
                 row![text_icon(icon).size(20), text(label).size(16)]
@@ -921,6 +1010,11 @@ impl State {
 
         let logs = time::every(Duration::from_millis(200))
             .map(|_| Message::DrainLogs);
-        Subscription::batch([ticks, logs])
+
+        let fee_rate = self.fee_rate_selector
+            .subscription()
+            .map(Message::FeeRateSelector);
+
+        Subscription::batch([ticks, logs, fee_rate])
     }
 }

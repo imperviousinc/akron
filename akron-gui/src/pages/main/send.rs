@@ -18,7 +18,6 @@ pub struct State {
     recipient: String,
     amount: String,
     slabel: Option<SLabel>,
-    fee_rate: String,
     error: Option<String>,
     tx_result: Option<TxResultWidget>
 }
@@ -30,7 +29,6 @@ impl Default for State {
             recipient: Default::default(),
             amount: Default::default(),
             slabel: Default::default(),
-            fee_rate: Default::default(),
             error: Default::default(),
             tx_result: Default::default(),
         }
@@ -43,25 +41,22 @@ pub enum Message {
     RecipientInput(String),
     AmountInput(String),
     SLabelSelect(SLabel),
-    FeeRateInput(String),
     SendCoinsSubmit,
     SendSpaceSubmit,
     ClientResult(Result<WalletResponse, String>),
     TxResult(TxListMessage),
 }
 
-#[derive(Debug, Clone)]
+
 pub enum Action {
     None,
     SendCoins {
         recipient: String,
         amount: Amount,
-        fee_rate: Option<FeeRate>,
     },
     SendSpace {
         recipient: String,
         slabel: SLabel,
-        fee_rate: Option<FeeRate>,
     },
     ShowTransactions,
 }
@@ -71,7 +66,6 @@ impl State {
         self.recipient = Default::default();
         self.amount = Default::default();
         self.slabel = Default::default();
-        self.fee_rate = Default::default();
     }
 
     pub fn update(&mut self, message: Message) -> Action {
@@ -101,24 +95,16 @@ impl State {
                 self.slabel = Some(slabel);
                 Action::None
             }
-            Message::FeeRateInput(fee_rate) => {
-                if is_fee_rate_input(&fee_rate) {
-                    self.fee_rate = fee_rate
-                }
-                Action::None
-            }
             Message::SendCoinsSubmit => {
                 Action::SendCoins {
                     recipient: recipient_from_str(&self.recipient).unwrap(),
                     amount: amount_from_str(&self.amount).unwrap(),
-                    fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
                 }
             }
             Message::SendSpaceSubmit => {
                 Action::SendSpace {
                     slabel: self.slabel.clone().unwrap(),
                     recipient: recipient_from_str(&self.recipient).unwrap(),
-                    fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
                 }
             }
             Message::ClientResult(Ok(w)) => {
@@ -167,8 +153,7 @@ impl State {
                     Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()
-                            && amount_from_str(&self.amount).is_some()
-                            && fee_rate_from_str(&self.fee_rate).is_some())
+                            && amount_from_str(&self.amount).is_some())
                         .then_some(Message::SendCoinsSubmit),
                     )
                     .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
@@ -177,12 +162,6 @@ impl State {
                         "bitcoin address or @space",
                         &self.recipient,
                         Message::RecipientInput,
-                    )
-                    .add_text_input(
-                        "Fee rate",
-                        "sat/vB (auto if empty)",
-                        &self.fee_rate,
-                        Message::FeeRateInput,
                     )
                 ],
                 AddressKind::Space => column![
@@ -196,8 +175,7 @@ impl State {
                     Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()
-                            && self.slabel.is_some()
-                            && fee_rate_from_str(&self.fee_rate).is_some())
+                            && self.slabel.is_some())
                         .then_some(Message::SendSpaceSubmit),
                     )
                     .add_pick_list(
@@ -211,12 +189,6 @@ impl State {
                         "bitcoin address or @space",
                         &self.recipient,
                         Message::RecipientInput,
-                    )
-                    .add_text_input(
-                        "Fee rate",
-                        "sat/vB (auto if empty)",
-                        &self.fee_rate,
-                        Message::FeeRateInput,
                     ),
                 ],
             }

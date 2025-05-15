@@ -126,6 +126,7 @@ impl<'a, Message: Clone + 'a> Form<'a, Message> {
                     .on_action(on_action)
                     .font(Font::MONOSPACE)
                     .padding(10)
+                    .height(200)
                     .style(|theme: &Theme, status: text_editor::Status| {
                         let mut style = text_editor::default(theme, status);
                         style.border = style.border.rounded(7);

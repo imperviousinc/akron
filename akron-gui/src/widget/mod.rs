@@ -4,3 +4,4 @@ pub mod rect;
 pub mod tabs;
 pub mod text;
 pub mod tx_result;
+pub mod fee_rate;

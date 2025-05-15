@@ -18,6 +18,7 @@ use crate::{
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug)]
 pub struct State {
@@ -25,6 +26,7 @@ pub struct State {
     transactions_limit: usize,
     fee_rate: String,
     error: Option<String>,
+    tx_result: Option<TxResultWidget>
 }
 
 impl Default for State {
@@ -34,6 +36,7 @@ impl Default for State {
             transactions_limit: 10,
             fee_rate: String::new(),
             error: None,
+            tx_result: None,
         }
     }
 }
@@ -47,7 +50,8 @@ pub enum Message {
     TxsListScrolled(f32, usize),
     FeeRateInput(String),
     BumpFeeSubmit,
-    BumpFeeResult(Result<(), String>),
+    BumpFeeResult(Result<WalletResponse, String>),
+    TxResult(TxListMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +79,7 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         self.error = None;
+        self.tx_result = None;
         match message {
             Message::BackPress => {
                 self.txid = None;
@@ -104,12 +109,23 @@ impl State {
                 txid: self.txid.unwrap(),
                 fee_rate: fee_rate_from_str(&self.fee_rate).unwrap().unwrap(),
             },
-            Message::BumpFeeResult(Ok(())) => {
+            Message::BumpFeeResult(Ok(w)) => {
+                if w.result.iter().any(|r| r.error.is_some()) {
+                    self.tx_result = Some(TxResultWidget::new(w));
+                    return Action::None;
+                }
+
                 self.reset();
                 Action::GetTransactions
             }
             Message::BumpFeeResult(Err(err)) => {
                 self.error = Some(err);
+                Action::None
+            }
+            Message::TxResult(msg) => {
+                if let Some(tx_result) = &mut self.tx_result {
+                    tx_result.update(msg);
+                }
                 Action::None
             }
         }
@@ -285,6 +301,11 @@ impl State {
                             column![
                                 text_big("Bump fee"),
                                 error_block(self.error.as_ref()),
+                                if let Some(tx_widget) = &self.tx_result {
+                                    tx_widget.view().map(Message::TxResult)
+                                } else {
+                                    text("").into()
+                                },
                                 Form::new(
                                     "Bump fee",
                                     fee_rate_from_str(&self.fee_rate)
