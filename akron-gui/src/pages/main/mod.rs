@@ -417,7 +417,7 @@ impl State {
                         fee_rate,
                     )
                     .map(|r| {
-                        Message::SendScreen(send::Message::ClientResult(r.result.map(|_| ())))
+                        Message::SendScreen(send::Message::ClientResult(r.result))
                     }),
                 send::Action::SendSpace {
                     recipient,
@@ -432,7 +432,7 @@ impl State {
                         fee_rate,
                     )
                     .map(|r| {
-                        Message::SendScreen(send::Message::ClientResult(r.result.map(|_| ())))
+                        Message::SendScreen(send::Message::ClientResult(r.result))
                     }),
                 send::Action::ShowTransactions => self.navigate_to(Route::Home),
                 send::Action::None => Task::none(),
@@ -460,9 +460,7 @@ impl State {
                             fee_rate,
                         )
                         .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(
-                                r.result.map(|_| ()),
-                            ))
+                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
                         }),
                     spaces::Action::BidSpace {
                         slabel,
@@ -477,9 +475,7 @@ impl State {
                             fee_rate,
                         )
                         .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(
-                                r.result.map(|_| ()),
-                            ))
+                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
                         }),
                     spaces::Action::RegisterSpace { slabel, fee_rate } => self
                         .client
@@ -489,9 +485,7 @@ impl State {
                             fee_rate,
                         )
                         .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(
-                                r.result.map(|_| ()),
-                            ))
+                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
                         }),
                     spaces::Action::RenewSpace { slabel, fee_rate } => self
                         .client
@@ -501,9 +495,7 @@ impl State {
                             fee_rate,
                         )
                         .map(|r| {
-                            Message::SpacesScreen(spaces::Message::ClientResult(
-                                r.result.map(|_| ()),
-                            ))
+                            Message::SpacesScreen(spaces::Message::ClientResult(r.result))
                         }),
                     spaces::Action::ShowTransactions => self.navigate_to(Route::Home),
                     spaces::Action::None => Task::none(),
