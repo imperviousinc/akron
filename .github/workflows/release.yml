@@ -1,5 +1,8 @@
 name: Build Akron GUI
 
+permissions:
+  contents: write
+  
 on:
   push:
     tags:
