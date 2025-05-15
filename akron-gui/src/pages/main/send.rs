@@ -1,5 +1,5 @@
 use iced::Element;
-use iced::widget::column;
+use iced::widget::{column, text};
 
 use crate::{
     client::*,
@@ -10,6 +10,7 @@ use crate::{
         text::{error_block, text_big},
     },
 };
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug)]
 pub struct State {
@@ -19,6 +20,7 @@ pub struct State {
     slabel: Option<SLabel>,
     fee_rate: String,
     error: Option<String>,
+    tx_result: Option<TxResultWidget>
 }
 
 impl Default for State {
@@ -30,6 +32,7 @@ impl Default for State {
             slabel: Default::default(),
             fee_rate: Default::default(),
             error: Default::default(),
+            tx_result: Default::default(),
         }
     }
 }
@@ -43,7 +46,8 @@ pub enum Message {
     FeeRateInput(String),
     SendCoinsSubmit,
     SendSpaceSubmit,
-    ClientResult(Result<(), String>),
+    ClientResult(Result<WalletResponse, String>),
+    TxResult(TxListMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +76,8 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         self.error = None;
+        self.tx_result = None;
+
         match message {
             Message::TabPress(asset_kind) => {
                 self.asset_kind = asset_kind;
@@ -102,7 +108,6 @@ impl State {
                 Action::None
             }
             Message::SendCoinsSubmit => {
-                self.error = None;
                 Action::SendCoins {
                     recipient: recipient_from_str(&self.recipient).unwrap(),
                     amount: amount_from_str(&self.amount).unwrap(),
@@ -110,19 +115,28 @@ impl State {
                 }
             }
             Message::SendSpaceSubmit => {
-                self.error = None;
                 Action::SendSpace {
                     slabel: self.slabel.clone().unwrap(),
                     recipient: recipient_from_str(&self.recipient).unwrap(),
                     fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
                 }
             }
-            Message::ClientResult(Ok(())) => {
+            Message::ClientResult(Ok(w)) => {
+                if w.result.iter().any(|r| r.error.is_some()) {
+                    self.tx_result = Some(TxResultWidget::new(w));
+                    return Action::None;
+                }
                 self.reset_inputs();
                 Action::ShowTransactions
             }
             Message::ClientResult(Err(err)) => {
                 self.error = Some(err);
+                Action::None
+            }
+            Message::TxResult(msg) => {
+                if let Some(tx_result) = &mut self.tx_result {
+                    tx_result.update(msg);
+                }
                 Action::None
             }
         }
@@ -145,6 +159,11 @@ impl State {
                 AddressKind::Coin => column![
                     text_big("Send coins"),
                     error_block(self.error.as_ref()),
+                    if let Some(tx_widget) = &self.tx_result {
+                        tx_widget.view().map(Message::TxResult)
+                    } else {
+                        text("").into()
+                   },
                     Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()
@@ -169,6 +188,11 @@ impl State {
                 AddressKind::Space => column![
                     text_big("Send space"),
                     error_block(self.error.as_ref()),
+                    if let Some(tx_widget) = &self.tx_result {
+                        tx_widget.view().map(Message::TxResult)
+                    } else {
+                        text("").into()
+                    },
                     Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()

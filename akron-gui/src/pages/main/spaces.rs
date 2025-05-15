@@ -18,6 +18,7 @@ use crate::{
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Filter {
@@ -34,6 +35,7 @@ pub struct State {
     amount: String,
     fee_rate: String,
     error: Option<String>,
+    tx_result: Option<TxResultWidget>
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +52,8 @@ pub enum Message {
     BidSubmit,
     RegisterSubmit,
     RenewSubmit,
-    ClientResult(Result<(), String>),
+    ClientResult(Result<WalletResponse, String>),
+    TxResult(TxListMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +110,8 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         self.error = None;
+        self.tx_result = None;
+
         match message {
             Message::BackPress => {
                 self.slabel = None;
@@ -164,12 +169,22 @@ impl State {
                 slabel: self.slabel.as_ref().unwrap().clone(),
                 fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
             },
-            Message::ClientResult(Ok(())) => {
+            Message::ClientResult(Ok(w)) => {
+                if w.result.iter().any(|r| r.error.is_some()) {
+                    self.tx_result = Some(TxResultWidget::new(w));
+                    return Action::None;
+                }
                 self.reset_inputs();
                 Action::ShowTransactions
             }
             Message::ClientResult(Err(err)) => {
                 self.error = Some(err);
+                Action::None
+            }
+            Message::TxResult(msg) => {
+                if let Some(tx_result) = &mut self.tx_result {
+                    tx_result.update(msg);
+                }
                 Action::None
             }
         }
@@ -243,6 +258,11 @@ impl State {
             column![
                 text_big("Open space"),
                 error_block(self.error.as_ref()),
+                 if let Some(tx_widget) = &self.tx_result {
+                    tx_widget.view().map(Message::TxResult)
+                 } else {
+                    text("").into()
+                 },
                 self.open_form(),
             ]
             .spacing(10),
@@ -268,6 +288,11 @@ impl State {
             column![
                 text_big("Bid space"),
                 error_block(self.error.as_ref()),
+                if let Some(tx_widget) = &self.tx_result {
+                    tx_widget.view().map(Message::TxResult)
+                } else {
+                    text("").into()
+                },
                 row![
                     text("Current bid").size(14),
                     text_bold(format_amount(current_bid).to_string()).size(14),
@@ -299,6 +324,11 @@ impl State {
                 column![
                     text_big("Register space"),
                     error_block(self.error.as_ref()),
+                    if let Some(tx_widget) = &self.tx_result {
+                        tx_widget.view().map(Message::TxResult)
+                    } else {
+                        text("").into()
+                    },
                     self.register_form(),
                 ]
                 .spacing(10)
@@ -306,6 +336,11 @@ impl State {
                 column![
                     text_big("Bid space"),
                     error_block(self.error.as_ref()),
+                    if let Some(tx_widget) = &self.tx_result {
+                        tx_widget.view().map(Message::TxResult)
+                    } else {
+                        text("").into()
+                    },
                     row![
                         text("Current bid").size(14),
                         text_bold(format_amount(current_bid)).size(14),
@@ -356,6 +391,11 @@ impl State {
                 column![
                     text_big("Renew space"),
                     error_block(self.error.as_ref()),
+                    if let Some(tx_widget) = &self.tx_result {
+                        tx_widget.view().map(Message::TxResult)
+                    } else {
+                        text("").into()
+                    },
                     self.renew_form(),
                 ]
                 .spacing(10)

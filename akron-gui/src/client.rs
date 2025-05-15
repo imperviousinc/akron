@@ -84,7 +84,7 @@ impl Client {
                 let spaces_data_dir = data_dir.join("spaces");
                 let mut yuki_args: Vec<String> = [
                     "--chain",
-                    &network.fallback_network().to_string(),
+                    &network.to_string(),
                     "--data-dir",
                     yuki_data_dir.to_str().unwrap(),
                 ]
@@ -129,8 +129,23 @@ impl Client {
                         prune_point.height
                     ));
                 }
-                yuki_args.push("--filters-endpoint".to_string());
-                yuki_args.push("https://bitpki.com/".to_string());
+
+                match network {
+                    ExtendedNetwork::Mainnet => {
+                        yuki_args.push("--filters-endpoint".to_string());
+                        yuki_args.push("https://bitpki.com/".to_string());
+
+                        // Optional: used for a quick acceptance test
+                        // TODO: add option in settings to skip mempool acceptance tests
+                        yuki_args.push("--broadcast-endpoint".to_string());
+                        yuki_args.push("https://mempool.space/api/tx".to_string());
+                    }
+                    ExtendedNetwork::Testnet4 => {
+                        yuki_args.push("--broadcast-endpoint".to_string());
+                        yuki_args.push("https://mempool.space/testnet4/api/tx".to_string());
+                    }
+                    _ => {}
+                }
 
                 if let Err(e) = akron.start(ServiceKind::Yuki, yuki_args).await {
                     let _ = shutdown.send(());
