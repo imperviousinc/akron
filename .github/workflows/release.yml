@@ -1,0 +1,111 @@
+name: Build Akron GUI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get the tag name
+        id: get_tag
+        run: |
+          echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TAG=dev-$(date +'%Y%m%d%H%M')" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: |
+          cargo build --bin akron-gui --release --target ${{ matrix.target }}
+
+      - name: Get OS and architecture
+        run: |
+          echo "OS=$(echo ${{ matrix.target }} | grep -q 'linux' && echo 'linux' || echo 'darwin')" >> $GITHUB_ENV
+          echo "ARCH=$(echo ${{ matrix.target }} | grep -q 'aarch64' && echo 'arm64' || echo 'x86_64')" >> $GITHUB_ENV
+
+      - name: Create Linux app bundle
+        if: env.OS == 'linux'
+        run: |
+          mkdir akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
+          cp target/${{ matrix.target }}/release/akron-gui akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
+          tar -czf akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.tar.gz akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
+
+      - name: Create MacOS app bundle
+        if: env.OS == 'darwin'
+        run: |
+          mkdir -p akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/{MacOS,Resources}
+          cp target/${{ matrix.target }}/release/akron-gui akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/MacOS/
+
+          mkdir -p iconbuild.iconset
+          sips -z 16 16 assets/akron.png --out iconbuild.iconset/icon_16x16.png
+          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_16x16@2x.png
+          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_32x32.png
+          sips -z 64 64 assets/akron.png --out iconbuild.iconset/icon_32x32@2x.png
+          iconutil -c icns iconbuild.iconset -o icon.icns
+          cp icon.icns akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/Resources/
+          
+          cat > akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>akron</string>
+            <key>CFBundleIconFile</key>
+            <string>icon</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.akron.app</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>Akron</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ env.TAG }}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.13</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+          tar -czf akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.tar.gz akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}  # Dynamically use the pushed tag
+          name: Release ${{ env.TAG }}  # Use the tag for the release name
+          body: |
+            Akron release of version ${{ env.TAG }}.
+          draft: false
+          prerelease: false
+          files: | 
+            akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.tar.gz
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
