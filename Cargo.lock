@@ -4606,7 +4606,7 @@ dependencies = [
 [[package]]
 name = "spaces_client"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
+source = "git+https://github.com/spacesprotocol/spaces.git#ccba00ec0f35ec1045f181c69541c041a82484d1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4636,7 +4636,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
+source = "git+https://github.com/spacesprotocol/spaces.git#ccba00ec0f35ec1045f181c69541c041a82484d1"
 dependencies = [
  "bincode",
  "bitcoin",
@@ -4647,7 +4647,7 @@ dependencies = [
 [[package]]
 name = "spaces_wallet"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#bb58d726711011b8aa517a35806c0816ef4bc3a8"
+source = "git+https://github.com/spacesprotocol/spaces.git#ccba00ec0f35ec1045f181c69541c041a82484d1"
 dependencies = [
  "anyhow",
  "bdk_wallet",
@@ -6292,7 +6292,7 @@ dependencies = [
 [[package]]
 name = "yuki"
 version = "0.0.1"
-source = "git+https://github.com/buffrr/yuki.git#14a261666b15e6cc7e6360d53153d2bf6060717a"
+source = "git+https://github.com/buffrr/yuki.git#a833507ba7b0206fca9e6ae357d8cb46561e12f0"
 dependencies = [
  "anyhow",
  "bincode",
@@ -6306,6 +6306,7 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
