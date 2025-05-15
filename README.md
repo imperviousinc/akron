@@ -8,7 +8,7 @@ Akron is the first Bitcoin wallet with [spaces protocol](https://spacesprotocol.
 
 ```
 git clone https://github.com/imperviousinc/akron.git
-cd akron && cargo build --release
+cd akron && cargo build --bin akron-gui --release
 ```
 
 ## License
