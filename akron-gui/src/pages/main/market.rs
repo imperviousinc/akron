@@ -11,13 +11,17 @@ use iced::{
     Border, Element, Fill, Theme,
     widget::{column, container, row, text_editor},
 };
+use iced::widget::text;
+use spaces_client::wallets::WalletResponse;
 use spaces_wallet::bdk_wallet::serde_json;
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug, Default)]
 pub struct BuyState {
     listing: text_editor::Content,
     fee_rate: String,
     error: Option<String>,
+    tx_result: Option<TxResultWidget>
 }
 
 #[derive(Debug, Default)]
@@ -45,14 +49,14 @@ pub enum Message {
     BuyTabPress,
     SellTabPress,
     ListingAction(text_editor::Action),
-    FeeRateInput(String),
     SLabelSelect(SLabel),
     PriceInput(String),
     BuySubmit,
-    BuyResult(Result<(), String>),
+    BuyResult(Result<WalletResponse, String>),
     SellSubmit,
     SellResult(Result<Listing, String>),
     CopyPress,
+    TxResult(TxListMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +64,6 @@ pub enum Action {
     None,
     Buy {
         listing: Listing,
-        fee_rate: Option<FeeRate>,
     },
     Sell {
         slabel: SLabel,
@@ -87,7 +90,10 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         match self {
-            Self::Buy(state) => state.error = None,
+            Self::Buy(state) => {
+                state.error = None;
+                state.tx_result = None;
+            },
             Self::Sell(state) => state.error = None,
         }
         match message {
@@ -101,12 +107,6 @@ impl State {
             }
             Message::ListingAction(action) => {
                 self.as_buy().listing.perform(action);
-                Action::None
-            }
-            Message::FeeRateInput(fee_rate) => {
-                if is_fee_rate_input(&fee_rate) {
-                    self.as_buy().fee_rate = fee_rate
-                }
                 Action::None
             }
             Message::SLabelSelect(slabel) => {
@@ -123,10 +123,17 @@ impl State {
                 let state = self.as_buy();
                 Action::Buy {
                     listing: listing_from_str(&state.listing.text()).unwrap(),
-                    fee_rate: fee_rate_from_str(&state.fee_rate).unwrap(),
                 }
             }
-            Message::BuyResult(Ok(())) => Action::ShowTransactions,
+            Message::BuyResult(Ok(w)) => {
+                if w.result.iter().any(|r| r.error.is_some()) {
+                    if let State::Buy(buy_state) = self {
+                        buy_state.tx_result = Some(TxResultWidget::new(w));
+                    }
+                    return Action::None;
+                }
+                Action::ShowTransactions
+            },
             Message::BuyResult(Err(err)) => {
                 if let Self::Buy(state) = self {
                     state.error = Some(err);
@@ -153,6 +160,14 @@ impl State {
                 Action::None
             }
             Message::CopyPress => Action::WriteClipboard(self.as_sell().listing.clone().unwrap()),
+            Message::TxResult(msg) => {
+                if let Self::Buy(state) = self {
+                    if let Some(tx_result) = &mut state.tx_result {
+                        tx_result.update(msg);
+                    }
+                }
+                Action::None
+            }
         }
     }
 
@@ -166,6 +181,11 @@ impl State {
                     column![
                         text_big("Buy space"),
                         error_block(state.error.as_ref()),
+                        if let Some(tx_widget) = &state.tx_result {
+                            tx_widget.view().map(Message::TxResult)
+                        } else {
+                            text("").into()
+                        },
                         Form::new(
                             "Buy",
                             (listing_from_str(&state.listing.text()).is_some()
@@ -173,12 +193,6 @@ impl State {
                             .then_some(Message::BuySubmit),
                         )
                         .add_text_editor("Listing", "JSON", &state.listing, Message::ListingAction)
-                        .add_text_input(
-                            "Fee rate",
-                            "sat/vB (auto if empty)",
-                            &state.fee_rate,
-                            Message::FeeRateInput,
-                        )
                     ]
                 }
                 Self::Sell(state) => {

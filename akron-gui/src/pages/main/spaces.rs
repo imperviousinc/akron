@@ -33,7 +33,6 @@ pub struct State {
     search: String,
     filter: Filter,
     amount: String,
-    fee_rate: String,
     error: Option<String>,
     tx_result: Option<TxResultWidget>
 }
@@ -47,7 +46,6 @@ pub enum Message {
     SearchInput(String),
     FilterPress(Filter),
     AmountInput(String),
-    FeeRateInput(String),
     OpenSubmit,
     BidSubmit,
     RegisterSubmit,
@@ -66,20 +64,16 @@ pub enum Action {
     OpenSpace {
         slabel: SLabel,
         amount: Amount,
-        fee_rate: Option<FeeRate>,
     },
     BidSpace {
         slabel: SLabel,
         amount: Amount,
-        fee_rate: Option<FeeRate>,
     },
     RegisterSpace {
         slabel: SLabel,
-        fee_rate: Option<FeeRate>,
     },
     RenewSpace {
         slabel: SLabel,
-        fee_rate: Option<FeeRate>,
     },
     ShowTransactions,
 }
@@ -87,7 +81,6 @@ pub enum Action {
 impl State {
     pub fn reset_inputs(&mut self) {
         self.amount = Default::default();
-        self.fee_rate = Default::default();
     }
 
     pub fn reset(&mut self) {
@@ -145,29 +138,19 @@ impl State {
                 }
                 Action::None
             }
-            Message::FeeRateInput(fee_rate) => {
-                if is_fee_rate_input(&fee_rate) {
-                    self.fee_rate = fee_rate
-                }
-                Action::None
-            }
             Message::OpenSubmit => Action::OpenSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
                 amount: amount_from_str(&self.amount).unwrap(),
-                fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
             },
             Message::BidSubmit => Action::BidSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
                 amount: amount_from_str(&self.amount).unwrap(),
-                fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
             },
             Message::RegisterSubmit => Action::RegisterSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
-                fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
             },
             Message::RenewSubmit => Action::RenewSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
-                fee_rate: fee_rate_from_str(&self.fee_rate).unwrap(),
             },
             Message::ClientResult(Ok(w)) => {
                 if w.result.iter().any(|r| r.error.is_some()) {
@@ -193,47 +176,27 @@ impl State {
     fn open_form(&self) -> Element<'_, Message> {
         Form::new(
             "Open",
-            (amount_from_str(&self.amount).is_some()
-                && fee_rate_from_str(&self.fee_rate).is_some())
+            (amount_from_str(&self.amount).is_some())
             .then_some(Message::OpenSubmit),
         )
         .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
-        .add_text_input(
-            "Fee rate",
-            "sat/vB (auto if empty)",
-            &self.fee_rate,
-            Message::FeeRateInput,
-        )
         .into()
     }
 
     fn bid_form(&self, current_bid: Amount) -> Element<'_, Message> {
         Form::new(
             "Bid",
-            (amount_from_str(&self.amount).is_some_and(|amount| amount > current_bid)
-                && fee_rate_from_str(&self.fee_rate).is_some())
+            (amount_from_str(&self.amount).is_some_and(|amount| amount > current_bid))
             .then_some(Message::BidSubmit),
         )
         .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
-        .add_text_input(
-            "Fee rate",
-            "sat/vB (auto if empty)",
-            &self.fee_rate,
-            Message::FeeRateInput,
-        )
         .into()
     }
 
     fn register_form(&self) -> Element<'_, Message> {
         Form::new(
             "Register",
-            fee_rate_from_str(&self.fee_rate).map(|_| Message::RegisterSubmit),
-        )
-        .add_text_input(
-            "Fee rate",
-            "sat/vB (auto if empty)",
-            &self.fee_rate,
-            Message::FeeRateInput,
+            Some(Message::RegisterSubmit),
         )
         .into()
     }
@@ -241,13 +204,7 @@ impl State {
     fn renew_form(&self) -> Element<'_, Message> {
         Form::new(
             "Renew",
-            fee_rate_from_str(&self.fee_rate).map(|_| Message::RenewSubmit),
-        )
-        .add_text_input(
-            "Fee rate",
-            "sat/vB (auto if empty)",
-            &self.fee_rate,
-            Message::FeeRateInput,
+            Some(Message::RenewSubmit),
         )
         .into()
     }

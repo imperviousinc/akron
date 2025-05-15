@@ -591,12 +591,12 @@ impl Client {
         wallet: String,
         txid: Txid,
         fee_rate: FeeRate,
-    ) -> Task<WalletResult<()>> {
+    ) -> Task<WalletResult<WalletResponse>> {
         let client = self.client.clone();
         Task::perform(
             async move {
                 let result = client.wallet_bump_fee(&wallet, txid, fee_rate, false).await;
-                (wallet, result.map(|_| ()))
+                (wallet, result.map(|r| WalletResponse { result: r }))
             },
             map_wallet_result,
         )
@@ -607,12 +607,12 @@ impl Client {
         wallet: String,
         listing: Listing,
         fee_rate: Option<FeeRate>,
-    ) -> Task<WalletResult<()>> {
+    ) -> Task<WalletResult<WalletResponse>> {
         let client = self.client.clone();
         Task::perform(
             async move {
                 let result = client.wallet_buy(&wallet, listing, fee_rate, false).await;
-                (wallet, result.map(|_| ()))
+                (wallet, result.map(|r| WalletResponse { result: vec![r] }))
             },
             map_wallet_result,
         )
