@@ -15,10 +15,11 @@ use crate::{
         icon::{button_icon, text_icon, text_input_icon, Icon},
         rect,
         tabs::TabsRow,
-        text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
+        text::{error_block, text_big, text_bold, text_monospace, text_small},
     },
 };
 use crate::widget::base::{base_container, result_column};
+use crate::widget::form::STANDARD_PADDING;
 use crate::widget::text::{text_semibold};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -410,6 +411,7 @@ impl State {
         ].spacing(80)).into()
     }
 
+
     pub fn view<'a>(
         &'a self,
         tip_height: u32,
@@ -420,12 +422,13 @@ impl State {
     ) -> Element<'a, Message> {
         if let Some(slabel) = self.slabel.as_ref() {
             let covenant = spaces.get_covenant(slabel);
+            container(
             column![
                 row![
                     button(text_icon(Icon::ChevronLeft).size(20))
                         .style(button::text)
                         .on_press(Message::BackPress),
-                    text_monospace_bold(slabel.to_string()).size(20),
+                    text_semibold(slabel.to_string()).size(20),
                     button_icon(Icon::Copy)
                         .style(button::text)
                         .on_press(Message::CopySLabelPress(slabel.clone())),
@@ -463,6 +466,7 @@ impl State {
             ]
                 .padding([20, 0])
                 .spacing(20)
+            )
         } else {
             let mut slabels: Vec<&SLabel> = if self.search.is_empty() {
                 match self.filter {
@@ -552,9 +556,8 @@ impl State {
                         (text_small("Reserved").width(Fill).into(), State::None)
                     }
                 };
+                container(
                 column![
-                    horizontal_rule(2.0),
-                    Space::with_height(10),
                     row![
                         button(
                             Row::new()
@@ -585,7 +588,7 @@ impl State {
                                         }
                                     )),
                                 })
-                                .push(text_monospace(slabel.to_string()))
+                                .push(text_semibold(slabel.to_string()).size(20))
                                 .spacing(5)
                                 .align_y(Center)
                         )
@@ -595,27 +598,40 @@ impl State {
                         data,
                     ]
                     .align_y(Center)
-                    .spacing(5),
+                    .spacing(20),
                 ]
-                    .spacing(5)
-                    .padding([10, 0])
+                    .spacing(20)
+                ).style(|_t: &Theme| {
+                    container::Style {
+                        background: Some(Color::from_rgb8(0xFC, 0xFD, 0xFE).into()),
+                        border: rounded(12).width(1).color(Color::from_rgb8(0xDD, 0xE3, 0xEA)),
+                        ..container::Style::default()
+                    }
+                }).padding(STANDARD_PADDING)
                     .into()
             };
 
+            container(scrollable(
+            container(
             column![
                 Column::new()
                     .push(
                         container(
                             text_input("Enter a space name ...", &self.search)
-                                .icon(text_input_icon(Icon::AtSign, None, 10.0))
+                                .icon(text_input_icon(Icon::AtSign, Some(24.into()), 10.0))
                                 .on_input(Message::SearchInput)
                                 .font(Font {
                                     weight: font::Weight::Semibold,
                                     family: font::Family::Name("Karla"),
                                     ..font::Font::DEFAULT
                                 }).style(|theme: &Theme, status: text_input::Status| {
+                            let p = theme.extended_palette();
                                 let mut style = text_input::default(theme, status);
                                 style.border = style.border.rounded(12);
+                                match status {
+                                    text_input::Status::Active =>  style.icon = p.primary.weak.color,
+                                    _ => style.icon = p.primary.base.color,
+                                };
                                 style
                                  })
                                 .size(18)
@@ -644,7 +660,6 @@ impl State {
                     } else {
                         None
                     }),
-                scrollable(
                     Column::new()
                         .push_maybe(
                             slabel_from_str(&self.search)
@@ -653,14 +668,10 @@ impl State {
                         )
                         .extend(slabels.into_iter().map(card))
                         .push(Space::with_height(5))
-                        .spacing(5),
-                )
-                .spacing(10)
-                .height(Fill)
-                .width(Fill),
-            ].width(Fill)
+                        .spacing(10),
+            ].width(800)
                 .padding([20, 20])
-                .spacing(50)
+                .spacing(50)).width(Fill).align_x(Center))).width(Fill).height(Fill)
         }
             .into()
     }
