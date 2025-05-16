@@ -1,25 +1,24 @@
-use iced::{
-    font,
-    widget::{
-        button, center, column, container, horizontal_rule, row, scrollable, text, Column, Row,
-        Space,
-    },
-    Center, Element, Fill,
-};
-
+use iced::{font, widget::{
+    button, center, column, container, horizontal_rule, row, scrollable, text, Column, Row,
+    Space,
+}, Center, Color, Element, Fill, Font, Theme};
+use iced::border::rounded;
+use iced::widget::text_input;
+use spaces_protocol::bitcoin::XOnlyPublicKey;
 use super::state::SpacesCollection;
 use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 use crate::{
     client::*,
     helpers::*,
     widget::{
-        form::{text_input, Form},
+        form::{Form},
         icon::{button_icon, text_icon, text_input_icon, Icon},
         rect,
         tabs::TabsRow,
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
+use crate::widget::text::{text_semibold};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Filter {
@@ -44,6 +43,7 @@ pub enum Message {
     SLabelPress(SLabel),
     CopySLabelPress(SLabel),
     CopyOutpointPress(OutPoint),
+    CopyPublicKeyPress(XOnlyPublicKey),
     SearchInput(String),
     FilterPress(Filter),
     AmountInput(String),
@@ -117,6 +117,7 @@ impl State {
             }
             Message::CopySLabelPress(slabel) => Action::WriteClipboard(slabel.to_string()),
             Message::CopyOutpointPress(outpoint) => Action::WriteClipboard(outpoint.to_string()),
+            Message::CopyPublicKeyPress(pubkey) => Action::WriteClipboard(pubkey.to_string()),
             Message::SearchInput(search) => {
                 if is_slabel_input(&search) {
                     self.search = search;
@@ -141,7 +142,9 @@ impl State {
             }
             Message::OpenSubmit => Action::OpenSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
-                amount: amount_from_str(&self.amount).unwrap(),
+                // TODO: allow users to choose during open but don't encourage them
+                // must be set under a check box e.g. advanced options ...etc
+                amount: amount_from_str("1000").unwrap(),
             },
             Message::BidSubmit => Action::BidSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
@@ -176,22 +179,19 @@ impl State {
 
     fn open_form(&self) -> Element<'_, Message> {
         Form::new(
-            "Open",
-            (amount_from_str(&self.amount).is_some())
-            .then_some(Message::OpenSubmit),
-        )
-        .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
-        .into()
+            "Start auction",
+            Some(Message::OpenSubmit),
+        ).into()
     }
 
     fn bid_form(&self, current_bid: Amount) -> Element<'_, Message> {
         Form::new(
             "Bid",
             (amount_from_str(&self.amount).is_some_and(|amount| amount > current_bid))
-            .then_some(Message::BidSubmit),
+                .then_some(Message::BidSubmit),
         )
-        .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
-        .into()
+            .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
+            .into()
     }
 
     fn register_form(&self) -> Element<'_, Message> {
@@ -199,7 +199,7 @@ impl State {
             "Register",
             Some(Message::RegisterSubmit),
         )
-        .into()
+            .into()
     }
 
     fn renew_form(&self) -> Element<'_, Message> {
@@ -207,25 +207,22 @@ impl State {
             "Renew",
             Some(Message::RenewSubmit),
         )
-        .into()
+            .into()
     }
 
+
     fn open_view(&self) -> Element<'_, Message> {
-        row![
-            timeline::view(0, "Make an open to propose the space for auction"),
-            column![
-                text_big("Open space"),
-                error_block(self.error.as_ref()),
-                if let Some(tx_widget) = &self.tx_result {
-                    tx_widget.view().map(Message::TxResult)
-                } else {
-                    text("").into()
-                },
-                self.open_form(),
-            ]
-            .spacing(10),
-        ]
-        .into()
+        timeline_container(
+            0,
+            "Click 'Start Auction' to begin.",
+            result_column(
+                self.error.as_ref(),
+                self.tx_result
+                    .as_ref()
+                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                [self.open_form()],
+            ).spacing(40),
+        ).into()
     }
 
     fn bid_view(
@@ -235,119 +232,167 @@ impl State {
         current_bid: Amount,
         is_winning: bool,
     ) -> Element<'_, Message> {
-        row![
-            timeline::view(
-                if claim_height.is_none() { 1 } else { 2 },
-                claim_height.map_or(
-                    "Make a bid to improve the chance of moving the space to auction".to_string(),
-                    |height| format!("Auction ends {}", height_to_future_est(height, tip_height))
-                )
+        timeline_container(
+            if claim_height.is_none() { 1 } else { 2 },
+            claim_height.map_or(
+                "Place a high bid to advance this space to auctions".to_string(),
+                |height|
+                    format!("Auction ends {}", height_to_future_est(height, tip_height)),
             ),
-            column![
-                text_big("Bid space"),
-                error_block(self.error.as_ref()),
-                if let Some(tx_widget) = &self.tx_result {
-                    tx_widget.view().map(Message::TxResult)
-                } else {
-                    text("").into()
-                },
-                row![
-                    text("Current bid").size(14),
-                    text_bold(format_amount(current_bid).to_string()).size(14),
-                ]
-                .spacing(5),
-                row![
-                    text("Winning bidder").size(14),
-                    text_bold(if is_winning { "you" } else { "not you" }).size(14),
-                ]
-                .spacing(5),
-                self.bid_form(current_bid),
-            ]
-            .spacing(10),
-        ]
-        .into()
+            result_column(
+                self.error.as_ref(),
+                self.tx_result
+                    .as_ref()
+                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                [
+                    column![
+                    row![
+                        text("Current bid").size(14),
+                        text_bold(format_amount(current_bid).to_string()).size(14),
+                    ].spacing(5),
+                    row![
+                        text("Winning bidder").size(14),
+                        text_bold(if is_winning { "you" } else { "not you" }).size(14),
+                    ].spacing(5),
+                ].into(),
+                    self.bid_form(current_bid)
+                ],
+            ).spacing(40),
+        ).into()
     }
 
     fn register_view(&self, current_bid: Amount, is_winning: bool) -> Element<'_, Message> {
-        row![
-            timeline::view(
-                3,
-                if is_winning {
-                    "You can register the space"
-                } else {
-                    "The auction is ended, but you still can outbid"
-                }
-            ),
+        timeline_container(
+            3,
             if is_winning {
-                column![
-                    text_big("Register space"),
-                    error_block(self.error.as_ref()),
-                    if let Some(tx_widget) = &self.tx_result {
-                        tx_widget.view().map(Message::TxResult)
-                    } else {
-                        text("").into()
-                    },
-                    self.register_form(),
-                ]
-                .spacing(10)
+                "Congrats! Register the space before you get outbid."
             } else {
-                column![
-                    text_big("Bid space"),
-                    error_block(self.error.as_ref()),
-                    if let Some(tx_widget) = &self.tx_result {
-                        tx_widget.view().map(Message::TxResult)
-                    } else {
-                        text("").into()
-                    },
-                    row![
+                "Space pending claim by winner. Outbid now to extend the auction."
+            },
+            if is_winning {
+                result_column(
+                    self.error.as_ref(),
+                    self.tx_result
+                        .as_ref()
+                        .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                    [self.register_form()],
+                ).spacing(10)
+            } else {
+                result_column(
+                    self.error.as_ref(),
+                    self.tx_result
+                        .as_ref()
+                        .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                    [row![
                         text("Current bid").size(14),
                         text_bold(format_amount(current_bid)).size(14),
                     ]
-                    .spacing(5),
-                    self.bid_form(current_bid),
-                ]
-                .spacing(10)
-            }
-        ]
-        .into()
+                        .spacing(5).into(),
+                        self.bid_form(current_bid), ],
+                ).spacing(10)
+            },
+        ).into()
     }
+
 
     fn registered_view<'a>(
         &'a self,
+        space: &SLabel,
         tip_height: u32,
         expire_height: u32,
-        outpoint: &'a OutPoint,
+        owner: (&'a OutPoint, &'a Option<XOnlyPublicKey>),
         is_owned: bool,
     ) -> Element<'a, Message> {
-        row![
+        let (outpoint, pubkey) = owner;
+        base_container(column![
+            container(
             column![
-                text(format!(
-                    "Expires {}",
-                    height_to_future_est(expire_height, tip_height)
-                )),
+                    // Pubkey heading
+                    row![
+                        text_monospace(space.to_string()).color(Color::BLACK).size(24),
+                    ].push_maybe(if let Some(pubkey) = pubkey.as_ref() {
+                        Some(button_icon(Icon::Copy)
+                        .style(|t: &Theme, s: button::Status| {
+                                let p = t.extended_palette();
+                                let mut style = button::text(t, s);
+                                if matches!(s, button::Status::Active) {
+                                    style.text_color = p.success.strong.color;
+                                }
+                                style
+                            })
+                        .on_press(Message::CopyPublicKeyPress(pubkey.clone())))
+                    } else { None })
+                        .push(Space::with_width(Fill))
+                        .push(text_icon(Icon::Bitcoin).color(Color::BLACK).size(28))
+                        .align_y(Center),
+            column![
+                    // Pubkey
+                    if let Some(pubkey) = pubkey.as_ref() {
+                        let key = pubkey.to_string();
+                         column![
+                            text_monospace(
+                                format!("{}", &key[..32]
+                                .chars()
+                                .collect::<Vec<char>>()
+                                .chunks(4)
+                                .map(|chunk| chunk.iter().collect::<String>())
+                                .collect::<Vec<String>>().join(" ")).to_uppercase()
+                            )
+                            .style(text::success)
+                             .size(20),
+                            text_monospace(
+                                format!("{}", &key[32..]
+                                .chars().collect::<Vec<char>>()
+                                .chunks(4)
+                                .map(|chunk| chunk.iter().collect::<String>())
+                                .collect::<Vec<String>>().join(" ")).to_uppercase()
+                            )
+                            .style(text::success)
+                            .size(20),
+                        ]
+                        .spacing(5)
+                        .width(Fill)
+                        .align_x(Center)
+                    } else {
+                        column![text_monospace("<address not supported>")]
+                        .width(Fill).align_x(Center)
+                    }
+            ].spacing(10).width(Fill),
+            column![
                 row![
                     text("Outpoint"),
+                    Space::with_width(Fill),
                     text_monospace({
                         let txid_string = outpoint.txid.to_string();
                         format!(
                             "{}..{}:{}",
-                            &txid_string[..8],
-                            &txid_string[54..],
+                            &txid_string[..20],
+                            &txid_string[50..],
                             outpoint.vout,
                         )
                     }),
                     button_icon(Icon::Copy)
                         .style(button::text)
                         .on_press(Message::CopyOutpointPress(*outpoint)),
-                ]
-                .spacing(5)
-                .align_y(Center)
+                ].width(Fill).align_y(Center),
+                row![
+                    text("Expires"),
+                    Space::with_width(Fill),
+                    text_bold(height_to_future_est(expire_height, tip_height))
+                ].width(Fill),
             ]
             .spacing(5)
-            .width(Fill),
+            .width(Fill)
+            ].spacing(40))
+            .width(Fill).style(|_t: &Theme| {
+                container::Style {
+                    border: rounded(12).color(Color::BLACK).width(1),
+                    ..container::Style::default()
+                }
+            }).padding(40),
             if is_owned {
                 column![
-                    text_big("Renew space"),
+                    text_big("Actions"),
                     error_block(self.error.as_ref()),
                     if let Some(tx_widget) = &self.tx_result {
                         tx_widget.view().map(Message::TxResult)
@@ -361,8 +406,7 @@ impl State {
                 column![]
             }
             .width(Fill)
-        ]
-        .into()
+        ].spacing(80)).into()
     }
 
     pub fn view<'a>(
@@ -406,6 +450,7 @@ impl State {
                     Some(Some(Covenant::Transfer { expire_height, .. })) => {
                         let is_owned = owned_spaces.contains(slabel);
                         self.registered_view(
+                            slabel,
                             tip_height,
                             *expire_height,
                             spaces.get_outpoint(slabel).unwrap(),
@@ -415,8 +460,8 @@ impl State {
                     Some(Some(Covenant::Reserved)) => center(text("The space is locked")).into(),
                 },
             ]
-            .padding(20)
-            .spacing(20)
+                .padding([20, 0])
+                .spacing(20)
         } else {
             let mut slabels: Vec<&SLabel> = if self.search.is_empty() {
                 match self.filter {
@@ -445,10 +490,10 @@ impl State {
                     None => (Space::with_width(Fill).into(), State::None),
                     Some(None) => (text_small("Available").width(Fill).into(), State::None),
                     Some(Some(Covenant::Bid {
-                        claim_height,
-                        total_burned,
-                        ..
-                    })) => {
+                                  claim_height,
+                                  total_burned,
+                                  ..
+                              })) => {
                         let is_claimable = claim_height.is_some_and(|height| height <= tip_height);
                         let is_winning = winning_spaces.contains(slabel);
                         (
@@ -470,8 +515,8 @@ impl State {
                                     text_small("Pre-auction")
                                 }
                             ]
-                            .width(Fill)
-                            .into(),
+                                .width(Fill)
+                                .into(),
                             if is_winning {
                                 if is_claimable {
                                     State::Success
@@ -493,8 +538,8 @@ impl State {
                                     height_to_future_est(*expire_height, tip_height)
                                 )),
                             ]
-                            .width(Fill)
-                            .into(),
+                                .width(Fill)
+                                .into(),
                             if is_owned && *expire_height <= tip_height {
                                 State::Danger
                             } else {
@@ -551,23 +596,35 @@ impl State {
                     .align_y(Center)
                     .spacing(5),
                 ]
-                .spacing(5)
-                .padding([10, 0])
-                .into()
+                    .spacing(5)
+                    .padding([10, 0])
+                    .into()
             };
 
             column![
                 Column::new()
                     .push(
                         container(
-                            text_input("space", &self.search)
+                            text_input("Enter a space name ...", &self.search)
                                 .icon(text_input_icon(Icon::AtSign, None, 10.0))
                                 .on_input(Message::SearchInput)
-                                .font(font::Font::MONOSPACE)
-                                .size(20)
-                                .padding([10, 20]),
+                                .font(Font {
+                                    weight: font::Weight::Semibold,
+                                    family: font::Family::Name("Karla"),
+                                    ..font::Font::DEFAULT
+                                }).style(|theme: &Theme, status: text_input::Status| {
+                                let mut style = text_input::default(theme, status);
+                                style.border = style.border.rounded(12);
+                                style
+                                 })
+                                .size(18)
+                                .width(600)
+                                .padding([24, 24]),
                         )
-                        .padding([30, 100]),
+                    .width(Fill)
+                    .align_x(Center)
+                    .align_y(Center)
+                        .padding([65, 100]),
                     )
                     .push_maybe(if self.search.is_empty() {
                         Some(
@@ -600,116 +657,147 @@ impl State {
                 .spacing(10)
                 .height(Fill)
                 .width(Fill),
-            ]
-            .padding([20, 20])
-            .spacing(50)
+            ].width(Fill)
+                .padding([20, 20])
+                .spacing(50)
         }
-        .into()
+            .into()
     }
 }
 
-mod timeline {
-    use crate::widget::rect::*;
-    use iced::{
-        widget::{text, Column, Row},
-        Border, Center, Element, Fill, Theme,
-    };
-
-    const CIRCLE_RADIUS: f32 = 20.0;
-    const LINE_WIDTH: f32 = 3.0;
-    const LINE_HEIGHT: f32 = 50.0;
-    const ROW_SPACING: f32 = 10.0;
-
-    fn circle<'a>(filled: bool, border: bool, inner: bool) -> Rect<'a> {
-        Rect::new(CIRCLE_RADIUS * 2.0, CIRCLE_RADIUS * 2.0).style(move |theme: &Theme| {
-            let palette = theme.palette();
-            Style {
-                border: Border {
-                    color: if border {
-                        palette.primary
-                    } else {
-                        palette.text
-                    },
-                    width: LINE_WIDTH,
-                    radius: CIRCLE_RADIUS.into(),
-                },
-                background: if filled {
-                    Some(palette.primary.into())
-                } else {
-                    None
-                },
-                inner: if inner {
-                    Some(Inner {
-                        border: Border {
-                            radius: CIRCLE_RADIUS.into(),
-                            ..Border::default()
-                        },
-                        background: Some(palette.primary.into()),
-                        padding: (CIRCLE_RADIUS / 2.0).into(),
-                    })
-                } else {
-                    None
-                },
-            }
-        })
+pub fn result_column<'a, Message: 'a>(
+    error: Option<impl text::IntoFragment<'a>>,
+    tx_result: Option<Element<'a, Message>>,
+    children: impl IntoIterator<Item=Element<'a, Message>>,
+) -> Column<'a, Message> {
+    let mut col = Column::new();
+    if error.is_some() {
+        col = col.push(error_block(error));
     }
-
-    fn line<'a>(filled: bool) -> Rect<'a> {
-        Rect::new(CIRCLE_RADIUS * 2.0, LINE_HEIGHT).style(move |theme: &Theme| {
-            let palette = theme.palette();
-            Style {
-                inner: Some(Inner {
-                    background: Some(
-                        if filled {
-                            palette.primary
-                        } else {
-                            palette.text
-                        }
-                        .into(),
-                    ),
-                    padding: [0.0, CIRCLE_RADIUS - LINE_WIDTH / 2.0].into(),
-                    ..Inner::default()
-                }),
-                ..Style::default()
-            }
-        })
+    if let Some(tx_result) = tx_result {
+        col = col.push(tx_result);
     }
-
-    fn space<'a>() -> Rect<'a> {
-        Rect::new(CIRCLE_RADIUS * 2.0, LINE_HEIGHT)
+    for child in children {
+        col = col.push_maybe(child.into());
     }
+    col
+}
 
-    pub fn view<'a, Message: 'a>(
-        state: u8,
-        label: impl text::IntoFragment<'a> + Clone,
-    ) -> Element<'a, Message> {
+// same as base container but has a timeline at the top
+fn timeline_container<'a, Message: 'a>(step: u8, desc: impl text::IntoFragment<'a>,
+                                       content: impl Into<Element<'a, Message>>, ) -> Element<'a, Message> {
+    base_container(
+        column![timeline_bar(step, desc), content.into()]
+            .spacing(40)
+            .align_x(Center)
+    )
+}
+
+// centered container with consistent width
+fn base_container<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    scrollable(
+        container(
+            container(content.into())
+                .padding(40)
+                .width(650)
+                .align_x(Center)
+        )
+            .width(Fill)
+            .align_x(Center)
+    ).width(Fill).height(Fill).into()
+}
+
+fn timeline_bar<'a, Message: 'a>(step: u8, description: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+    column!(
+        timeline_widget::view(step),
+        text_semibold(description).size(20),
+   ).align_x(Center).spacing(40).into()
+}
+
+mod timeline_widget {
+    use iced::{Center, Element, Padding, Theme, widget::{Column, Row, text}, border, Top};
+    use iced::widget::container;
+    use crate::widget::text::{text_bold};
+
+    const LINE_LENGTH: f32 = 60.0;
+
+    pub fn view<'a, Message: 'a>(state: u8) -> Element<'a, Message> {
         const LABELS: [&str; 4] = ["Open", "Pre-auction", "Auction", "Claim"];
         if state > LABELS.len() as u8 {
             panic!("state is out of range");
         }
-        Column::from_iter((0..(LABELS.len() as u8) * 2).map(|i| {
-            let c = i % 2 == 0;
-            let n = i / 2;
+
+        let mut timeline_row = Row::new();
+        for n in 0..LABELS.len() as u8 {
             let o = n.cmp(&state);
-            let row = Row::new()
-                .push(if c {
-                    circle(o.is_lt(), o.is_le(), o.is_eq())
-                } else if n == LABELS.len() as u8 - 1 {
-                    space()
+            let step_column = Row::new()
+                .push(
+                    Column::new()
+                        .spacing(14)
+                        .push(
+                            container(text_bold(format!("{}", n + 1)).size(14))
+                                .width(36)
+                                .height(36)
+                                .align_y(Center)
+                                .align_x(Center)
+                                .style(move |theme: &Theme| {
+                                    let palette = theme.extended_palette();
+                                    container::Style {
+                                        background: if o.is_eq() {
+                                            Some(palette.primary.weak.color.into())
+                                        } else {
+                                            Some(palette.background.weak.color.into())
+                                        },
+                                        border: border::rounded(6),
+                                        ..container::Style::default()
+                                    }
+                                }))
+                        .push(
+                            text_bold(LABELS[n as usize])
+                                .width(100)
+                                .size(14)
+                                .align_x(Center)
+                                .style(move |theme: &Theme| {
+                                    let palette = theme.extended_palette();
+                                    text::Style {
+                                        color: if o.is_eq() {
+                                            palette.primary.strong.color.into()
+                                        } else {
+                                            None
+                                        },
+                                        ..text::Style::default()
+                                    }
+                                }))
+                        .align_x(Center),
+                )
+                .push(if n < LABELS.len() as u8 - 1 {
+                    container(
+                        container("")
+                            .width(LINE_LENGTH)
+                            .height(1.2)
+                            .style(|theme: &Theme| {
+                                let palette = theme.extended_palette();
+                                container::Style {
+                                    background: Some(palette.background.weak.color.into()),
+                                    ..container::Style::default()
+                                }
+                            }))
+                        .padding(Padding {
+                            top: 20.0,
+                            right: 0.0,
+                            bottom: 0.0,
+                            left: 0.0,
+                        }).into()
                 } else {
-                    line(o.is_lt())
+                    container("")
                 })
-                .push_maybe(if c {
-                    Some(text(LABELS[n as usize]))
-                } else if (state == LABELS.len() as u8 && state - n == 1) || o.is_eq() {
-                    Some(text(label.clone()))
-                } else {
-                    None
-                })
-                .spacing(ROW_SPACING);
-            if c { row.align_y(Center) } else { row }.into()
-        }))
-        .width(Fill)
-        .into()
+                .align_y(Top);
+            timeline_row = timeline_row.push(step_column).align_y(Center);
+        }
+
+        timeline_row
+            .align_y(Center)
+            .into()
     }
 }

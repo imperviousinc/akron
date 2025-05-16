@@ -23,7 +23,7 @@ use crate::{
     widget::{
         fee_rate::{FeeRateMessage, FeeRateSelector},
         icon::{text_icon, Icon},
-        text::{text_bold, text_small},
+        text::{text_small},
     },
     Config,
 };
@@ -735,17 +735,20 @@ impl State {
     pub fn main_view(&self) -> Element<Message> {
         let navbar_button = |label, icon: Icon, route: Route, screen: Screen| {
             let button = button(
-                row![text_icon(icon).size(20), text(label).size(16)]
+                row![if self.screen == screen {
+                    text_icon(icon).size(20).style(text::primary) } else {
+                    text_icon(icon).size(20)
+                }, text(label).size(16)]
                     .spacing(10)
                     .align_y(Center),
             )
             .style(move |theme: &Theme, status: button::Status| {
                 let mut style = if self.screen == screen {
-                    button::primary
+                    button::secondary
                 } else {
                     button::text
                 }(theme, status);
-                style.border = style.border.rounded(7);
+                style.border = style.border.rounded(4);
                 style
             })
             .width(Fill);
@@ -753,22 +756,8 @@ impl State {
         };
 
         Column::new()
-            .push_maybe(self.wallets.get_current().and_then(|wallet| {
-                if !wallet.is_synced() {
-                    Some(
-                        Stack::new()
-                            .push(progress_bar(0.0..=1.0, wallet.sync_status_percentage()))
-                            .push(center(text_bold(format!(
-                                "{} ({:.1}%)",
-                                wallet.sync_status_string(),
-                                wallet.sync_status_percentage() * 100.0,
-                            )))),
-                    )
-                } else {
-                    None
-                }
-            }))
             .push(row![
+                // SIDEBAR
                 column![
                     navbar_button("Home", Icon::Bitcoin, Route::Home, Screen::Home,),
                     navbar_button("Send", Icon::ArrowBigUpDash, Route::Send, Screen::Send,),
@@ -793,7 +782,32 @@ impl State {
                 .spacing(5)
                 .width(200),
                 vertical_rule(3),
-                container(match &self.screen {
+                Column::new()
+                .height(Fill)
+                .width(Fill)
+                .push_maybe(self.wallets.get_current().and_then(|wallet| {
+                if !wallet.is_synced() {
+                    Some(
+                        Stack::new()
+                            .push(container(
+                                progress_bar(0.0..=1.0, wallet.sync_status_percentage()
+                                ).style(|t| {
+                                    let mut style = progress_bar::primary(t);
+                                    let p = t.extended_palette();
+                                    style.bar = p.primary.weak.color.into();
+                                    style
+                                }).height(Fill)).height(40))
+                            .push(center(text(format!(
+                                "{} ({:.1}%)",
+                                wallet.sync_status_string(),
+                                wallet.sync_status_percentage() * 100.0,
+                            )).size(14))),
+                    )
+                } else {
+                    None
+                }
+            }))
+                .push(container(match &self.screen {
                     Screen::Home =>
                         if let Some(wallet) = self.wallets.get_current() {
                             self.home_screen
@@ -862,7 +876,7 @@ impl State {
                             self.wallets.get_current().map(|w| w.label),
                         )
                         .map(Message::SettingsScreen),
-                })
+                }).height(Fill))
             ])
             .push_maybe(self.logs_view())
             .into()
