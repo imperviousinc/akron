@@ -62,7 +62,7 @@ async fn async_main(akrond : Akron, shutdown: broadcast::Sender<()>) -> anyhow::
     // everytime.
     // TODO: check if the db already exists and store the initial checkpoint somewhere (to pass to yuki)
     let checkpoint =
-        akrond.load_checkpoint("https://bitpki.com/protocol.sdb", &checkpoint_path, None).await?;
+        akrond.load_checkpoint("https://checkpoint.akron.io/protocol.sdb", &checkpoint_path, None).await?;
 
     yuki_args.push("--prune-point");
 

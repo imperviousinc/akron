@@ -1,8 +1,5 @@
-use iced::{
-    widget::{button, center, column, container, horizontal_space, row},
-    Center, Element, Task,
-};
-
+use iced::{widget::{button, center, column, container, row}, Bottom, Center, Element, Fill, Task, Theme};
+use iced::widget::text;
 use spaces_client::config::ExtendedNetwork;
 
 use crate::{
@@ -14,6 +11,7 @@ use crate::{
     },
     Config, ConfigBackend,
 };
+use crate::widget::text::text_semibold;
 
 #[derive(Debug)]
 pub struct State {
@@ -238,15 +236,19 @@ impl State {
     }
 
     pub fn view(&self) -> Element<Message> {
+        const DESCRIPTION_TEXT_HEIGHT : u16 = 100;
+
         container(if self.config.backend.is_none() {
             column![
                 text_big("Select backend"),
                 row![
                     column![
                         text_icon(Icon::Bolt).size(150),
-                        text_bold("Compact sync"),
+                        text_bold("Compact Bitcoin node"),
+                        text("Faster checkpointed sync with minimal storage. Syncs essential data from peers. Easiest for most users.")
+                        .height(DESCRIPTION_TEXT_HEIGHT),
                         submit_button(
-                            "Continue",
+                           text("Start").width(Fill).align_x(Center),
                             Some(Message::BackendSet(ConfigBackend::Akrond {
                                 network: ExtendedNetwork::Mainnet,
                                 prune_point: None,
@@ -255,12 +257,13 @@ impl State {
                     ]
                     .align_x(Center)
                     .spacing(30),
-                    horizontal_space(),
                     column![
                         text_icon(Icon::Bitcoin).size(150),
-                        text_bold("Custom bitcoind"),
+                        text_bold("Full Node"),
+                        text("Use your own Bitcoin node. Requires blockchain data not pruned before block 871222.")
+                        .height(DESCRIPTION_TEXT_HEIGHT),
                         submit_button(
-                            "Continue",
+                            text("Connect").width(Fill).align_x(Center),
                             Some(Message::BackendSet(ConfigBackend::Bitcoind {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:8332".to_string(),
@@ -268,25 +271,34 @@ impl State {
                                 user: String::new(),
                                 password: String::new(),
                             }))
-                        ),
+                        ).style(|theme: &Theme, status: button::Status| {
+                            let mut style = button::secondary(theme, status);
+                            style.border = style.border.rounded(7);
+                            style
+                        }),
                     ]
                     .align_x(Center)
                     .spacing(30),
-                    horizontal_space(),
                     column![
                         text_icon(Icon::AtSign).size(150),
-                        text_bold("Custom spaced"),
+                        text_bold("Spaced instance"),
+                        text("For users running Spaced connected to a Bitcoin node on their own server.")
+                        .height(DESCRIPTION_TEXT_HEIGHT),
                         submit_button(
-                            "Continue",
+                            text("Connect").width(Fill).align_x(Center),
                             Some(Message::BackendSet(ConfigBackend::Spaced {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:7225".to_string(),
                             }))
-                        ),
+                        ).style(|theme: &Theme, status: button::Status| {
+                            let mut style = button::secondary(theme, status);
+                            style.border = style.border.rounded(7);
+                            style
+                        }),
                     ]
                     .align_x(Center)
                     .spacing(30),
-                ]
+                ].align_y(Bottom).padding([0, 80]).spacing(80)
             ]
             .spacing(10)
         } else if self.client.is_none() {
@@ -362,7 +374,7 @@ impl State {
                 ]
                 .spacing(10)
             } else {
-                column![center(text_big("Loading...")),]
+                column![center(text_semibold("Please wait... This may take a few minutes.").size(16)),]
             }
         } else {
             column![
@@ -375,24 +387,22 @@ impl State {
                 .align_y(Center),
                 error_block(self.error.as_ref()),
                 row![
-                    horizontal_space(),
                     column![
                         text_icon(Icon::WalletMinimal).size(150),
-                        text_bold("Create a new spaces wallet"),
-                        submit_button("Continue", Some(Message::CreateWallet)),
+                        text_semibold("Create a new spaces wallet").size(20),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::CreateWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
                     column![
                         text_icon(Icon::FolderDown).size(150),
-                        text_bold("Load an existing spaces wallet"),
-                        submit_button("Continue", Some(Message::ImportWallet)),
+                        text_semibold("Load an existing spaces wallet").size(20),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::ImportWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
-                    horizontal_space(),
-                ]
-                .spacing(200),
+                ].align_y(Bottom)
+                .spacing(140).padding([0, 140]),
             ]
             .spacing(10)
         })

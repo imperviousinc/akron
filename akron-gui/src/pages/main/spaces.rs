@@ -662,20 +662,19 @@ impl State {
                     }),
                     Column::new()
                         .push_maybe(if slabels.is_empty() && self.search.is_empty() {
+                    column![
+                        horizontal_rule(2),
                     container(
                         container(
                         text(format!("No {}", match &self.filter {
                             Filter::Owned => "owned spaces",
                             Filter::Bidding => "bids"})
                         ).size(16)
-                            ).align_x(Center).style(|_t: &Theme| {
-                    container::Style {
-                        background: Some(Color::from_rgb8(0xFC, 0xFD, 0xFE).into()),
-                        ..container::Style::default()
-                    }
-                }).padding(80).width(Fill)
+                            ).align_x(Center)
+                        .padding(80).width(Fill)
                     ).align_x(Center)
                     .width(Fill)
+                     ].spacing(40).width(Fill)
                     .into()
                 } else {
                     None

@@ -108,7 +108,7 @@ impl Client {
                         ExtendedNetwork::Mainnet => {
                             let checkpoint = akron
                                 .load_checkpoint(
-                                    "https://bitpki.com/protocol.sdb",
+                                    "https://checkpoint.akron.io/protocol.sdb",
                                     &spaces_data_dir.join(network.to_string()),
                                     None,
                                 )
@@ -133,16 +133,20 @@ impl Client {
                 match network {
                     ExtendedNetwork::Mainnet => {
                         yuki_args.push("--filters-endpoint".to_string());
-                        yuki_args.push("https://bitpki.com/".to_string());
+                        yuki_args.push("https://checkpoint.akron.io/".to_string());
 
                         // Optional: used for a quick acceptance test
                         // TODO: add option in settings to skip mempool acceptance tests
                         yuki_args.push("--broadcast-endpoint".to_string());
-                        yuki_args.push("https://mempool.space/api/tx".to_string());
+
+                        // Works exactly like https://mempool.space/api/tx, which we can't
+                        // unfortunately use, because it doesn't support specifying
+                        // `maxburnamount` flag, so any OP_RETURN with non-zero burn will not work
+                        yuki_args.push("https://broadcastmempoolcheck.akron.io".to_string());
                     }
                     ExtendedNetwork::Testnet4 => {
                         yuki_args.push("--broadcast-endpoint".to_string());
-                        yuki_args.push("https://mempool.space/testnet4/api/tx".to_string());
+                        yuki_args.push("https://testnet4.broadcastmempoolcheck.akron.io/testnet4".to_string());
                     }
                     _ => {}
                 }
