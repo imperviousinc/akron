@@ -310,7 +310,7 @@ impl State {
                             ConfigBackend::Akrond { network, .. } => {
                                 Form::new("Connect", Some(Message::Connect)).add_pick_list(
                                     "Chain",
-                                    [ExtendedNetwork::Mainnet],
+                                    [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
                                     Some(network),
                                     Message::NetworkSelect,
                                 )

@@ -6,6 +6,15 @@ use iced::{
 pub fn text_bold<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(content).font(font::Font {
         weight: font::Weight::Bold,
+        family: font::Family::Name("Karla"),
+        ..font::Font::DEFAULT
+    })
+}
+
+pub fn text_semibold<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
+    text(content).font(font::Font {
+        family: font::Family::Name("Karla"),
+        weight: font::Weight::Semibold,
         ..font::Font::DEFAULT
     })
 }
@@ -14,6 +23,7 @@ pub fn text_monospace<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(content).font(font::Font::MONOSPACE)
 }
 
+#[allow(dead_code)]
 pub fn text_monospace_bold<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(content).font(font::Font {
         weight: font::Weight::Bold,
@@ -41,12 +51,13 @@ pub fn error_block<'a, Message: 'a>(
                 .center()
                 .width(Fill),
         )
-        .style(|theme: &Theme| {
-            container::Style::default().background(theme.extended_palette().danger.base.color)
-        })
-        .width(Fill)
-        .padding(10)
-        .into(),
+            .style(|theme: &Theme| {
+                container::Style::default().background(theme.extended_palette().danger.base.color)
+            })
+            .width(Fill)
+            .padding(10)
+            .into(),
         None => Space::new(0, 0).into(),
     }
 }
+

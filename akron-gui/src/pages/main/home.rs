@@ -1,23 +1,23 @@
 use serde::Deserialize;
 use std::str::FromStr;
 
-use iced::{
-    widget::{
-        button, center, column, container, horizontal_rule, horizontal_space, row, scrollable,
-        text, Column, Row, Space,
-    },
-    Center, Element, Fill, FillPortion, Theme,
-};
-
+use iced::{widget::{
+    button, center, column, container, horizontal_rule, horizontal_space, row, scrollable,
+    text, Column, Row,
+}, Center, Color, Element, Fill, FillPortion, Padding, Theme};
+use iced::border::rounded;
 use crate::{
     client::*,
     helpers::*,
     widget::{
         form::Form,
         icon::{button_icon, text_icon, Icon},
-        text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
+        text::{text_big, text_bold, text_monospace, text_small},
     },
 };
+use crate::widget::base::{base_container, result_column};
+use crate::widget::form::{STANDARD_PADDING};
+use crate::widget::text::text_semibold;
 use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug)]
@@ -263,15 +263,27 @@ impl State {
                         button(text_icon(Icon::ChevronLeft).size(20))
                             .style(button::text)
                             .on_press(Message::BackPress),
-                        text_monospace_bold(txid.to_string()).size(20),
+                        text_semibold({
+                                let txid_string = txid.to_string();
+                            format!("{} .. {}",
+                                                        &txid_string[..8],
+                                                        &txid_string[54..]
+                                                    )
+                        }).size(18),
                         button_icon(Icon::Copy)
                             .style(button::text)
                             .on_press(Message::CopyTxidPress(*txid)),
-                    ]
+                    ].padding(Padding {
+
+
+                    top: 20.0 , right: 0.0 , bottom: 0.0 , left: 0.0 , })
                     .spacing(5)
                     .align_y(Center),
                     horizontal_rule(3),
-                    row![
+                    base_container(
+                    column![
+
+                        container(
                         column![
                             text_bold("Info"),
                             text(format!("Sent: {}", format_amount(transaction.sent))),
@@ -295,18 +307,24 @@ impl State {
                         .extend(events_rows.into_iter())
                         .spacing(10)
                         .width(Fill),
+                        ).style(|t: &Theme| {
+                                let t = t.extended_palette();
+                container::Style {
+                    border: rounded(8).color(t.secondary.base.color).width(1),
+                    ..container::Style::default()
+                }
+            }).padding(40),
                         if transaction.block_height.is_some() {
                             column![]
                         } else {
                             column![
                                 text_big("Bump fee"),
-                                error_block(self.error.as_ref()),
-                                if let Some(tx_widget) = &self.tx_result {
-                                    tx_widget.view().map(Message::TxResult)
-                                } else {
-                                    text("").into()
-                                },
-                                Form::new(
+                                result_column(
+                                        self.error.as_ref(),
+                                        self.tx_result.as_ref()
+                                        .map(|tx| TxResultWidget::view(tx)
+                                            .map(Message::TxResult)),
+                                        [ Form::new(
                                     "Bump fee",
                                     fee_rate_from_str(&self.fee_rate)
                                         .flatten()
@@ -317,15 +335,15 @@ impl State {
                                     "sat/vB",
                                     &self.fee_rate,
                                     Message::FeeRateInput,
-                                ),
+                                ).into()]
+                                    ),
                             ]
                             .spacing(10)
                         }
                         .width(Fill)
-                    ]
-                    .spacing(20)
+                    ].spacing(40)
+                    )
                 ]
-                .padding(20)
                 .spacing(20)
                 .into()
             } else {
@@ -333,12 +351,20 @@ impl State {
             }
         } else {
             column![
-                column![text_big("Balance"), text(format_amount(balance)),]
+                column![
+                    text_big("Balance").size(22),
+                    text_big(format_amount(balance))
+                    .style(|t: &Theme| {
+                    let mut style = text::primary(t);
+                    let p = t.extended_palette();
+                    style.color = Some(p.primary.strong.color);
+                    style
+                }).size(28),]
                     .padding([30, 0])
                     .spacing(10)
                     .width(Fill)
                     .align_x(Center),
-                column![text_big("Transactions"), {
+                column![container(text_big("Transactions")).width(Fill).padding([0.0, 28.0]), {
                     let element: Element<'a, Message> = if transactions.is_empty() {
                         center(text("No transactions yet")).into()
                     } else {
@@ -408,9 +434,8 @@ impl State {
                                         .align_y(Center)
                                     };
 
+                                container(
                                 column![
-                                    horizontal_rule(2.0),
-                                    Space::with_height(10),
                                     row![
                                         container(
                                             button(
@@ -420,11 +445,11 @@ impl State {
                                                     } else {
                                                         None
                                                     })
-                                                    .push(text_monospace(format!(
+                                                    .push(text_semibold(format!(
                                                         "{} .. {}",
                                                         &txid_string[..8],
                                                         &txid_string[54..]
-                                                    ))),
+                                                    ))).spacing(10),
                                             )
                                             .style(button::text)
                                             .padding(0)
@@ -513,11 +538,16 @@ impl State {
                                     },
                                 ]
                                 .spacing(5)
-                                .padding([10, 0])
-                                .into()
-                            }))
-                            .push(Space::with_height(5))
-                            .spacing(5),
+                                ).style(|_t: &Theme| {
+                    container::Style {
+
+                        background: Some(Color::from_rgb8(0xFC, 0xFD, 0xFE).into()),
+                        border: rounded(8).width(1).color(Color::from_rgb8(0xDD, 0xE3, 0xEA)),
+                        ..container::Style::default()
+                    }
+                }).padding(STANDARD_PADDING).into()
+                            })).padding(STANDARD_PADDING)
+                            .spacing(10),
                         )
                         .on_scroll(|viewport| {
                             Message::TxsListScrolled(
@@ -525,13 +555,11 @@ impl State {
                                 transactions.len(),
                             )
                         })
-                        .spacing(20)
                         .height(Fill)
                         .into()
                     };
                     element
                 }]
-                .padding([20, 20])
                 .spacing(10)
                 .height(Fill)
                 .width(Fill),

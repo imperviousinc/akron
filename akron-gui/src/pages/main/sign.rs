@@ -2,10 +2,11 @@ use crate::{
     client::*,
     widget::{
         form::Form,
-        text::{error_block, text_big},
+        text::{text_big},
     },
 };
 use iced::{Element, widget::column};
+use crate::widget::base::{base_container, result_column};
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -63,10 +64,14 @@ impl State {
     }
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
+        base_container(
         column![
             text_big("Sign Nostr event"),
-            error_block(self.error.as_ref()),
-            Form::new(
+            result_column(
+                self.error.as_ref(),
+                None,
+                [
+                    Form::new(
                 "Save",
                 (self.slabel.is_some() && self.event.is_some()).then_some(Message::SignSubmit),
             )
@@ -81,10 +86,12 @@ impl State {
                 "JSON file",
                 self.event.as_ref().map_or("", |p| &p.0),
                 Message::PathPress,
-            ),
+            ).into()
+                ]
+            ).spacing(40),
         ]
-        .spacing(10)
-        .padding([60, 100])
+        .spacing(40)
+        )
         .into()
     }
 }

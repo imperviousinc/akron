@@ -1,12 +1,14 @@
 use iced::widget::qr_code::Data as QrCode;
 
 use spaces_client::wallets::{TxInfo, WalletInfoWithProgress, WalletStatus};
-use spaces_protocol::{Covenant, FullSpaceOut, slabel::SLabel};
+use spaces_protocol::{Covenant, FullSpaceOut, slabel::SLabel, SpaceOut};
+use spaces_protocol::bitcoin::XOnlyPublicKey;
 use spaces_wallet::bitcoin::{Amount, OutPoint};
 
 #[derive(Debug)]
 pub struct SpaceData {
     outpoint: OutPoint,
+    public_key: Option<XOnlyPublicKey>,
     covenant: Covenant,
 }
 #[derive(Debug, Default)]
@@ -17,15 +19,16 @@ impl SpacesCollection {
             slabel,
             out.map(|out| SpaceData {
                 outpoint: out.outpoint(),
+                public_key: public_key_from_spaceout(&out.spaceout),
                 covenant: out.spaceout.space.unwrap().covenant,
             }),
         );
     }
 
-    pub fn get_outpoint(&self, slabel: &SLabel) -> Option<&OutPoint> {
+    pub fn get_outpoint(&self, slabel: &SLabel) -> Option<(&OutPoint, &Option<XOnlyPublicKey>)> {
         self.0
             .get(slabel)
-            .and_then(|o| o.as_ref().map(|s| &s.outpoint))
+            .and_then(|o| o.as_ref().map(|s| (&s.outpoint, &s.public_key)))
     }
 
     pub fn get_covenant(&self, slabel: &SLabel) -> Option<Option<&Covenant>> {
@@ -162,5 +165,12 @@ impl WalletsCollection {
 
     pub fn get_data_mut(&mut self, label: &str) -> Option<&mut WalletData> {
         self.wallets.get_mut(label).and_then(|state| state.as_mut())
+    }
+}
+
+fn public_key_from_spaceout(out: &SpaceOut) -> Option<XOnlyPublicKey> {
+    match out.script_pubkey.is_p2tr() {
+        true => XOnlyPublicKey::from_slice(&out.script_pubkey.as_bytes()[2..]).ok(),
+        false => None,
     }
 }

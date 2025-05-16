@@ -1,5 +1,4 @@
-use iced::{application, theme, window, Color, Element, Subscription, Task};
-
+use iced::{application, theme, window, Color, Element, Font, Subscription, Task};
 use crate::{pages::*, Config};
 
 #[derive(Debug)]
@@ -21,6 +20,15 @@ impl State {
         let task = task.map(Message::Setup);
         application("Akron", Self::update, Self::view)
             .font(include_bytes!("../../assets/icons.ttf").as_slice())
+            .font(include_bytes!("../../assets/fonts/Karla/static/Karla-Bold.ttf").as_slice())
+            .font(include_bytes!("../../assets/fonts/Karla/static/Karla-SemiBold.ttf").as_slice())
+            .font(include_bytes!("../../assets/fonts/Karla/static/Karla-Regular.ttf").as_slice())
+            .default_font(Font {
+                family: iced::font::Family::Name("Karla"),
+                weight: iced::font::Weight::Normal,
+                stretch: iced::font::Stretch::Normal,
+                style: iced::font::Style::Normal,
+            })
             .subscription(Self::subscription)
             .window(window::Settings {
                 min_size: Some((1300.0, 500.0).into()),
@@ -38,12 +46,13 @@ impl State {
                 theme::Theme::custom_with_fn(
                     "Bitcoin".into(),
                     theme::Palette {
-                        text: Color::from_rgb8(77, 77, 77),
-                        primary: Color::from_rgb8(247, 147, 26),
+                        text: Color::from_rgb8(0, 0, 0),
+                        primary: Color::from_rgb8(0xFD,0x9E,0xB2),
                         ..theme::Palette::LIGHT
                     },
                     |pallete| {
                         let mut pallete = theme::palette::Extended::generate(pallete);
+                        pallete.primary.base.text = Color::from_rgb8(0xFD,0x9E,0xB2);
                         pallete.primary.base.text = Color::WHITE;
                         pallete.primary.strong.text = Color::WHITE;
                         pallete.primary.weak.text = Color::WHITE;

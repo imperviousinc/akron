@@ -1,5 +1,5 @@
 use iced::Element;
-use iced::widget::{column, text};
+use iced::widget::{column};
 
 use crate::{
     client::*,
@@ -7,9 +7,10 @@ use crate::{
     widget::{
         form::Form,
         tabs::TabsRow,
-        text::{error_block, text_big},
+        text::{text_big},
     },
 };
+use crate::widget::base::{base_container, result_column};
 use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug)]
@@ -129,6 +130,7 @@ impl State {
     }
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
+        base_container(
         column![
             TabsRow::new()
                 .add_tab(
@@ -143,13 +145,12 @@ impl State {
                 ),
             match self.asset_kind {
                 AddressKind::Coin => column![
-                    text_big("Send coins"),
-                    error_block(self.error.as_ref()),
-                    if let Some(tx_widget) = &self.tx_result {
-                        tx_widget.view().map(Message::TxResult)
-                    } else {
-                        text("").into()
-                   },
+                    text_big("Send Bitcoin"),
+                    result_column(
+                        self.error.as_ref(),
+                        self.tx_result
+                    .as_ref()
+                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),[
                     Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()
@@ -161,18 +162,17 @@ impl State {
                         "To",
                         "bitcoin address or @space",
                         &self.recipient,
-                        Message::RecipientInput,
-                    )
+                        Message::RecipientInput,).into()
+                    ]),
                 ],
                 AddressKind::Space => column![
                     text_big("Send space"),
-                    error_block(self.error.as_ref()),
-                    if let Some(tx_widget) = &self.tx_result {
-                        tx_widget.view().map(Message::TxResult)
-                    } else {
-                        text("").into()
-                    },
-                    Form::new(
+                    result_column(
+                        self.error.as_ref(),
+                        self.tx_result
+                    .as_ref()
+                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),[
+                             Form::new(
                         "Send",
                         (recipient_from_str(&self.recipient).is_some()
                             && self.slabel.is_some())
@@ -189,13 +189,14 @@ impl State {
                         "bitcoin address or @space",
                         &self.recipient,
                         Message::RecipientInput,
-                    ),
+                    ).into()
+                    ]),
+
                 ],
             }
-            .spacing(10)
-            .padding([60, 100])
-        ]
-        .padding([60, 0])
+            .spacing(40)
+        ].spacing(40)
+        )
         .into()
     }
 }
