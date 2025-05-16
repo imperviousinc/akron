@@ -120,9 +120,9 @@ jobs:
         uses: apple-actions/notarize@v1
         with:
           app-path:      akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
-          apple-id:      ${{ env.APPLE_ID }}
-          apple-id-password: ${{ env.APP_SPECIFIC_PASSWORD }}
-          team-id:       ${{ env.APPLE_TEAM_ID }}
+          apple-id:      ${{ secrets.APPLE_ID }}
+          apple-id-password: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+          team-id:       ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Staple notarization ticket
         if: env.OS == 'darwin'
