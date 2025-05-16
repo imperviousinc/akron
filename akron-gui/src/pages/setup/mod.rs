@@ -11,6 +11,7 @@ use crate::{
     },
     Config, ConfigBackend,
 };
+use crate::widget::base::base_container;
 use crate::widget::text::text_semibold;
 
 #[derive(Debug)]
@@ -320,12 +321,13 @@ impl State {
                         ];
                         match self.config.backend.as_ref().unwrap() {
                             ConfigBackend::Akrond { network, .. } => {
+                                base_container(
                                 Form::new("Connect", Some(Message::Connect)).add_pick_list(
                                     "Chain",
                                     [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
                                     Some(network),
                                     Message::NetworkSelect,
-                                )
+                                ))
                             }
                             ConfigBackend::Bitcoind {
                                 network,
@@ -333,7 +335,7 @@ impl State {
                                 cookie,
                                 user,
                                 password,
-                            } => Form::new("Connect", Some(Message::Connect))
+                            } => base_container(Form::new("Connect", Some(Message::Connect))
                                 .add_text_input(
                                     "Bitcoind JSON-RPC URL",
                                     "http://127.0.0.1:7225",
@@ -353,9 +355,9 @@ impl State {
                                     networks,
                                     Some(network),
                                     Message::NetworkSelect,
-                                ),
+                                )),
                             ConfigBackend::Spaced { network, url } => {
-                                Form::new("Connect", Some(Message::Connect))
+                                base_container(Form::new("Connect", Some(Message::Connect))
                                     .add_text_input(
                                         "Spaced JSON-RPC URL",
                                         "http://127.0.0.1:8332",
@@ -367,7 +369,7 @@ impl State {
                                         networks,
                                         Some(network),
                                         Message::NetworkSelect,
-                                    )
+                                    ))
                             }
                         }
                     },
