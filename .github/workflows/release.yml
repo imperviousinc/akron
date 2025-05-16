@@ -114,7 +114,29 @@ jobs:
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --deep --timestamp akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
           codesign --verify --verbose akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
 
-          ditto -c -k --keepParent akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }} akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.zip
+      # ──────────────── NOTARIZATION ────────────────
+      - name: Notarize with Apple
+        if: env.OS == 'darwin'
+        uses: apple-actions/notarize@v1
+        with:
+          app-path:      akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
+          apple-id:      ${{ env.APPLE_ID }}
+          apple-id-password: ${{ env.APP_SPECIFIC_PASSWORD }}
+          team-id:       ${{ env.APPLE_TEAM_ID }}
+
+      - name: Staple notarization ticket
+        if: env.OS == 'darwin'
+        uses: apple-actions/staple@v1
+        with:
+          app-path: akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
+      # ────────────────────────────────────────────────
+
+      - name: Zip macOS bundle
+        if: env.OS == 'darwin'
+        run: |
+          ditto -c -k --keepParent \
+            akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }} \
+            akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.zip
 
       - name: Create GitHub Release
         id: create_release
