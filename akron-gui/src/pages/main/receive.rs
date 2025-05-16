@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use crate::widget::base::base_container;
+use crate::widget::form::STANDARD_PADDING;
 
 #[derive(Debug)]
 pub struct State(AddressKind);
@@ -98,7 +99,7 @@ impl State {
                                 color: palette.background.strong.color,
                             })
                     })
-                    .padding(10),
+                    .padding(STANDARD_PADDING),
 
                 ]
                 .align_x(Center),

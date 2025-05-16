@@ -23,6 +23,7 @@ pub fn text_monospace<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(content).font(font::Font::MONOSPACE)
 }
 
+#[allow(dead_code)]
 pub fn text_monospace_bold<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(content).font(font::Font {
         weight: font::Weight::Bold,

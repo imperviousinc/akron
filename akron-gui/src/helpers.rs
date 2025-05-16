@@ -69,7 +69,7 @@ pub fn format_amount_number(mut n: u64) -> String {
 
     for (i, &digit) in digits.iter().rev().enumerate() {
         if i > 0 && (l - i) % 3 == 0 {
-            result.push('\u{2009}');
+            result.push(' ');
         }
         result.push(char::from_digit(digit as u32, 10).unwrap());
     }

@@ -388,7 +388,7 @@ impl State {
             ].spacing(40))
             .width(Fill).style(|_t: &Theme| {
                 container::Style {
-                    border: rounded(12).color(Color::BLACK).width(1),
+                    border: rounded(8).color(Color::BLACK).width(1),
                     ..container::Style::default()
                 }
             }).padding(40),
@@ -604,7 +604,7 @@ impl State {
                 ).style(|_t: &Theme| {
                     container::Style {
                         background: Some(Color::from_rgb8(0xFC, 0xFD, 0xFE).into()),
-                        border: rounded(12).width(1).color(Color::from_rgb8(0xDD, 0xE3, 0xEA)),
+                        border: rounded(8).width(1).color(Color::from_rgb8(0xDD, 0xE3, 0xEA)),
                         ..container::Style::default()
                     }
                 }).padding(STANDARD_PADDING)
@@ -627,7 +627,7 @@ impl State {
                                 }).style(|theme: &Theme, status: text_input::Status| {
                             let p = theme.extended_palette();
                                 let mut style = text_input::default(theme, status);
-                                style.border = style.border.rounded(12);
+                                style.border = style.border.rounded(8);
                                 match status {
                                     text_input::Status::Active =>  style.icon = p.primary.weak.color,
                                     _ => style.icon = p.primary.base.color,
@@ -730,7 +730,7 @@ mod timeline_widget {
                                         } else {
                                             Some(palette.background.weak.color.into())
                                         },
-                                        border: border::rounded(6),
+                                        border: border::rounded(8),
                                         ..container::Style::default()
                                     }
                                 }))
