@@ -4,16 +4,16 @@ use crate::{
         form::Form,
         icon::{Icon, button_icon},
         tabs::TabsRow,
-        text::{error_block, text_big, text_monospace},
+        text::{text_big, text_monospace},
     },
 };
 use iced::{
     Border, Element, Fill, Theme,
     widget::{column, container, row, text_editor},
 };
-use iced::widget::text;
 use spaces_client::wallets::WalletResponse;
 use spaces_wallet::bdk_wallet::serde_json;
+use crate::widget::base::{base_container, result_column};
 use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug, Default)]
@@ -172,6 +172,7 @@ impl State {
     }
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
+        base_container(
         column![
             TabsRow::new()
                 .add_tab("Buy", matches!(self, Self::Buy(_)), Message::BuyTabPress,)
@@ -180,26 +181,28 @@ impl State {
                 Self::Buy(state) => {
                     column![
                         text_big("Buy space"),
-                        error_block(state.error.as_ref()),
-                        if let Some(tx_widget) = &state.tx_result {
-                            tx_widget.view().map(Message::TxResult)
-                        } else {
-                            text("").into()
-                        },
-                        Form::new(
-                            "Buy",
+                        result_column(
+                            state.error.as_ref(),
+                            state.tx_result.as_ref()
+                            .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                            [Form::new("Buy",
                             (listing_from_str(&state.listing.text()).is_some()
                                 && fee_rate_from_str(&state.fee_rate).is_some())
-                            .then_some(Message::BuySubmit),
-                        )
-                        .add_text_editor("Listing", "JSON", &state.listing, Message::ListingAction)
-                    ]
+                            .then_some(Message::BuySubmit))
+                            .add_text_editor("Listing", "JSON", &state.listing, Message::ListingAction)
+                                .into()
+                            ]
+                        ).spacing(40),
+                    ].spacing(40)
                 }
                 Self::Sell(state) => {
                     column![
                         text_big("Sell space"),
-                        error_block(state.error.as_ref()),
-                        Form::new(
+                        result_column(
+                            state.error.as_ref(),
+                            None,
+                            [
+                                Form::new(
                             "Generate Listing",
                             (state.space.is_some() && amount_from_str(&state.price).is_some())
                                 .then_some(Message::SellSubmit),
@@ -215,31 +218,31 @@ impl State {
                             "sat",
                             &state.price,
                             Message::PriceInput,
-                        ),
+                        ).into(),
+                            ]),
+
                     ]
                     .push_maybe(state.listing.as_ref().map(|listing| {
                         container(row![
                             text_monospace(listing).width(Fill),
                             button_icon(Icon::Copy).on_press(Message::CopyPress)
-                        ])
+                        ]).padding(10)
                         .style(|theme: &Theme| {
                             let palette = theme.extended_palette();
                             container::Style::default()
                                 .background(palette.background.base.color)
                                 .border(Border {
-                                    radius: 2.0.into(),
+                                    radius: 6.0.into(),
                                     width: 1.0,
                                     color: palette.background.strong.color,
                                 })
                         })
-                        .padding(10)
-                    }))
+                    })).spacing(40)
                 }
             }
-            .spacing(10)
-            .padding([60, 100])
-        ]
-        .padding([60, 0])
+            .spacing(40)
+        ].spacing(40)
+        )
         .into()
     }
 }

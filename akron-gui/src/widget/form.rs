@@ -6,9 +6,9 @@ use std::borrow::Borrow;
 use std::convert::Into;
 use iced::widget::text;
 
-const STANDARD_PADDING_Y : f32 = 20.0;
-const STANDARD_PADDING_X : f32 = 20.0;
-const STANDARD_PADDING : Padding = Padding {
+pub const STANDARD_PADDING_Y : f32 = 20.0;
+pub const STANDARD_PADDING_X : f32 = 20.0;
+pub const STANDARD_PADDING : Padding = Padding {
     top: STANDARD_PADDING_Y,
     right: STANDARD_PADDING_X,
     bottom: STANDARD_PADDING_Y,
@@ -64,7 +64,7 @@ pub fn pick_list<
         })
         .font(Font::MONOSPACE)
         .width(Fill)
-        .padding(10)
+        .padding(STANDARD_PADDING)
 }
 
 pub fn submit_button<'a, Message>(
@@ -206,7 +206,7 @@ impl<'a, Message: Clone + 'a> Form<'a, Message> {
                 })
                 .on_press(on_press)
                 .width(Fill)
-                .padding(10),
+                .padding(STANDARD_PADDING),
             ]
             .spacing(5)
             .into(),

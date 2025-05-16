@@ -18,6 +18,7 @@ use crate::{
         text::{error_block, text_big, text_bold, text_monospace, text_monospace_bold, text_small},
     },
 };
+use crate::widget::base::{base_container, result_column};
 use crate::widget::text::{text_semibold};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -665,24 +666,6 @@ impl State {
     }
 }
 
-pub fn result_column<'a, Message: 'a>(
-    error: Option<impl text::IntoFragment<'a>>,
-    tx_result: Option<Element<'a, Message>>,
-    children: impl IntoIterator<Item=Element<'a, Message>>,
-) -> Column<'a, Message> {
-    let mut col = Column::new();
-    if error.is_some() {
-        col = col.push(error_block(error));
-    }
-    if let Some(tx_result) = tx_result {
-        col = col.push(tx_result);
-    }
-    for child in children {
-        col = col.push_maybe(child.into());
-    }
-    col
-}
-
 // same as base container but has a timeline at the top
 fn timeline_container<'a, Message: 'a>(step: u8, desc: impl text::IntoFragment<'a>,
                                        content: impl Into<Element<'a, Message>>, ) -> Element<'a, Message> {
@@ -693,20 +676,7 @@ fn timeline_container<'a, Message: 'a>(step: u8, desc: impl text::IntoFragment<'
     )
 }
 
-// centered container with consistent width
-fn base_container<'a, Message: 'a>(
-    content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    scrollable(
-        container(
-            container(content.into())
-                .padding(40)
-                .width(650)
-                .align_x(Center)
-        )
-            .width(Fill)
-            .align_x(Center)
-    ).width(Fill).height(Fill).into()
-}
+
 
 fn timeline_bar<'a, Message: 'a>(step: u8, description: impl text::IntoFragment<'a>) -> Element<'a, Message> {
     column!(

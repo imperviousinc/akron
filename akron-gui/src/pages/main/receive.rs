@@ -2,7 +2,6 @@ use iced::{
     Border, Center, Element, Fill, Theme,
     widget::{column, container, qr_code, row, text},
 };
-
 use super::state::AddressData;
 use crate::{
     client::*,
@@ -12,6 +11,7 @@ use crate::{
         text::{text_big, text_monospace},
     },
 };
+use crate::widget::base::base_container;
 
 #[derive(Debug)]
 pub struct State(AddressKind);
@@ -55,6 +55,7 @@ impl State {
             AddressKind::Space => space_address,
         };
 
+        base_container(
         column![TabsRow::new()
             .add_tab(
                 "Coins",
@@ -68,18 +69,19 @@ impl State {
             )]
         .push_maybe(address.map(|address| {
             column![
+                column![
                 text_big(match self.0 {
                     AddressKind::Coin => "Coins-only address",
                     AddressKind::Space => "Spaces address",
                 }),
                 text(match self.0 {
-                    AddressKind::Coin => "Bitcoin address suitable for receiving coins compatible with most bitcoin wallets",
-                    AddressKind::Space => "Bitcoin address suitable for receiving spaces and coins (Spaces compatible bitcoin wallets only)",
-                }),
+                    AddressKind::Coin => "Bitcoin address suitable for receiving coins compatible with most bitcoin wallets.",
+                    AddressKind::Space => "Bitcoin address suitable for receiving spaces and coins (Spaces compatible bitcoin wallets only).",
+                })].spacing(10),
                 column![
                     container(
                         row![
-                            text_monospace(address.as_str()).width(Fill),
+                            text_monospace(address.as_str()).size(12).width(Fill),
                             button_icon(Icon::Copy)
                                 .on_press(Message::CopyPress(address.as_str().to_owned())),
                         ]
@@ -97,14 +99,14 @@ impl State {
                             })
                     })
                     .padding(10),
-                    qr_code(address.as_qr_code()).cell_size(7),
+
                 ]
                 .align_x(Center),
-            ]
-            .spacing(10)
-            .padding([60, 100])
-        }))
-        .padding([60, 0])
+                container(qr_code(address.as_qr_code()).cell_size(7)).align_x(Center).width(Fill),
+            ].width(Fill)
+            .spacing(40)
+        })).width(Fill).spacing(40)
+        )
         .into()
     }
 }

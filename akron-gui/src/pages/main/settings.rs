@@ -1,12 +1,11 @@
-use iced::{
-    Center, Element, Fill, Shrink,
-    widget::{button, column, row, text},
-};
-
+use iced::{Center, Element, Fill, Shrink, widget::{button, column, row, text}, Theme};
+use iced::border::rounded;
 use crate::widget::{
     form::{pick_list, submit_button, text_input},
-    text::{error_block, text_big},
+    text::{text_big},
 };
+use crate::widget::base::{base_container, result_column};
+use crate::widget::form::STANDARD_PADDING;
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -83,11 +82,15 @@ impl State {
         wallets_names: Vec<&'a String>,
         wallet_name: Option<&'a String>,
     ) -> Element<'a, Message> {
+        base_container(
         column![
             column![
                 text_big("Wallet"),
-                error_block(self.error.as_ref()),
-                row![
+                result_column(
+                    self.error.as_ref(),
+                    None,
+                    [
+                        row![
                     pick_list(wallets_names, wallet_name, |w| {
                         Message::WalletSelect(w.to_string())
                     })
@@ -98,34 +101,44 @@ impl State {
                     )
                     .width(Shrink),
                 ]
-                .spacing(20),
+                .spacing(20).into(),
                 row![
-                    text_input("default", &self.new_wallet_name).on_input(Message::NewWalletInput),
+                    text_input("default", &self.new_wallet_name).width(Fill).on_input(Message::NewWalletInput),
+                        row![
                     submit_button(
-                        "Create",
+                        text("Create").align_x(Center),
                         if self.new_wallet_name.is_empty() {
                             None
                         } else {
                             Some(Message::CreateWalletPress)
                         }
                     ),
-                    submit_button("Import", Some(Message::ImportWalletPress)),
-                ]
-                .spacing(20),
+                    submit_button(text("Import").align_x(Center), Some(Message::ImportWalletPress)),
+                            ].spacing(5)
+                ].spacing(20).into()
+                    ]
+                ).spacing(40),
             ]
-            .spacing(10),
+            .spacing(40),
             column![
                 text_big("Backend"),
                 button(text("Reset backend settings").align_x(Center).width(Fill))
                     .on_press(Message::ResetBackendPress)
-                    .style(button::danger)
-                    .padding(10)
+                    .style(|t: &Theme, status: button::Status| {
+                    let mut style = button::danger(t, status);
+                    let p = t.extended_palette();
+                    if matches!(status, button::Status::Active) {
+                        style.background = Some(p.danger.weak.color.into());
+                    }
+                    style.border = rounded(7);
+                    style
+                })
+                    .padding(STANDARD_PADDING)
                     .width(Fill),
             ]
-            .spacing(10)
-        ]
-        .padding([60, 100])
-        .spacing(20)
+            .spacing(40)
+        ].spacing(40)
+        )
         .into()
     }
 }
