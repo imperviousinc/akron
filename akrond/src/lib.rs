@@ -5,7 +5,7 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use tokio::process::{Child, Command};
 use std::time::Duration;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use log::{error, info};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::{select};
@@ -14,6 +14,7 @@ use tokio::time::interval;
 use crate::runner::{ServiceCommand, ServiceKind};
 use std::process::Stdio;
 use reqwest::Client;
+use spaces_client::jsonrpsee::core::__reexports::serde_json;
 use spaces_client::rpc::RootAnchor;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -92,6 +93,18 @@ impl Akron {
         mut progress: Option<mpsc::Sender<CheckpointProgress>>,
     ) -> anyhow::Result<RootAnchor> {
         tokio::fs::create_dir_all(data_dir).await?;
+        let checkpoint_init = data_dir.join("akron.checkpoint.json");
+        if checkpoint_init.exists() {
+            let checkpoint : RootAnchor =
+                serde_json::from_slice(&tokio::fs::read(&checkpoint_init).await?)
+                    .map_err(|e| anyhow!("Could not deserialize checkpoint file: {}", e))?;
+
+            info!("Starting from loaded prune height: {}", checkpoint.block.height);
+            return Ok(checkpoint);
+        }
+
+        info!("Loading a new checkpoint");
+
         let spaces_path = data_dir.join("protocol.sdb");
         // Create HTTP client
         let client = Client::new();
@@ -143,6 +156,11 @@ impl Akron {
             _ = std::fs::remove_file(tmp);
             Ok(anchors.remove(0))
         }).await.expect("Could not spawn task")?;
+
+        let content = serde_json::to_string(&root_anchor)?;
+        tokio::fs::write(checkpoint_init, content).await
+            .map_err(|e| anyhow!("Could not write checkpoint init file: {}", e))?;
+
         Ok(root_anchor)
     }
 

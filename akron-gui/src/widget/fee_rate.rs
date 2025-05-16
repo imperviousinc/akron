@@ -10,6 +10,7 @@ use iced::widget::{
 use iced::{border, font, keyboard, widget, Fill, Padding, Shrink, Theme};
 use iced::{Color, Element, Subscription, Task};
 use serde::Deserialize;
+use crate::widget::text::text_semibold;
 
 #[derive(Default, Debug)]
 pub struct FeeRateSelector {
@@ -244,7 +245,7 @@ impl FeeRateSelector {
                         })
                         .size(20),
                         column![row![
-                            text(option.label().to_string()).size(16),
+                            text_semibold(option.label().to_string()).size(16),
                             Space::with_width(Fill),
                         ]
                         .padding(Padding {
@@ -272,7 +273,7 @@ impl FeeRateSelector {
                         .size(20),
                         column![
                             row![
-                                text(option.label()).size(16),
+                                text_semibold(option.label()).size(16),
                                 Space::with_width(Fill),
                                 text(display_value).size(18)
                             ],
@@ -298,7 +299,7 @@ impl FeeRateSelector {
                             container::Style {
                                 background: Some(if is_selected {
                                     // TODO: may need color adjust
-                                    palette.background.weak.color.into()
+                                    Color::from_rgb8(0xFF,0xFB,0xFC).into()
                                 } else {
                                     palette.background.base.color.into()
                                 }),
@@ -334,18 +335,23 @@ impl FeeRateSelector {
             }
 
             fee_content = fee_content.push(row![
-                button(text("cancel"))
-                    .padding([10, 20])
+                button(text("Cancel"))
+                    .padding(20)
                     .width(Shrink)
-                    .style(|theme: &Theme, status: button::Status| {
-                        let mut style = button::secondary(theme, status);
-                        style.border = style.border.rounded(7);
-                        style
-                    })
+                    .style(button::text)
+                    // .style(|theme: &Theme, status: button::Status| {
+                    //     let mut style = button::secondary(theme, status);
+                    //     let p = theme.extended_palette();
+                    //     style.border = style.border.rounded(7);
+                    //     if matches!(status, button::Status::Active) {
+                    //         style.background = Some(p.secondary.base.color.into());
+                    //     }
+                    //     style
+                    // })
                     .on_press(FeeRateMessage::HideModal),
                 Space::with_width(Fill),
                 button(text("Broadcast transaction"))
-                    .padding([10, 20])
+                    .padding(20)
                     .width(Shrink)
                     .on_press_maybe(
                         self.selected_fee_rate
