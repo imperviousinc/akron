@@ -1,8 +1,8 @@
 include!("../../../assets/icons.rs");
 
 use iced::{
+    widget::{button, text_input, Button, Text},
     Font, Pixels, Theme,
-    widget::{Button, Text, button, text_input},
 };
 
 pub fn text_icon<'a>(icon: Icon) -> Text<'a> {

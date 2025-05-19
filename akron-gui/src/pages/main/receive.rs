@@ -1,18 +1,18 @@
-use iced::{
-    Border, Center, Element, Fill, Theme,
-    widget::{column, container, qr_code, row, text},
-};
 use super::state::AddressData;
+use crate::widget::base::base_container;
+use crate::widget::form::STANDARD_PADDING;
 use crate::{
     client::*,
     widget::{
-        icon::{Icon, button_icon},
+        icon::{button_icon, Icon},
         tabs::TabsRow,
         text::{text_big, text_monospace},
     },
 };
-use crate::widget::base::base_container;
-use crate::widget::form::STANDARD_PADDING;
+use iced::{
+    widget::{column, container, qr_code, row, text},
+    Border, Center, Element, Fill, Theme,
+};
 
 #[derive(Debug)]
 pub struct State(AddressKind);

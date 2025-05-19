@@ -1,6 +1,7 @@
 use iced::{
-    Element, Fill, Theme, font,
-    widget::{Space, Text, container, text},
+    font,
+    widget::{container, text, Space, Text},
+    Element, Fill, Theme,
 };
 
 pub fn text_bold<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
@@ -51,13 +52,12 @@ pub fn error_block<'a, Message: 'a>(
                 .center()
                 .width(Fill),
         )
-            .style(|theme: &Theme| {
-                container::Style::default().background(theme.extended_palette().danger.base.color)
-            })
-            .width(Fill)
-            .padding(10)
-            .into(),
+        .style(|theme: &Theme| {
+            container::Style::default().background(theme.extended_palette().danger.base.color)
+        })
+        .width(Fill)
+        .padding(10)
+        .into(),
         None => Space::new(0, 0).into(),
     }
 }
-

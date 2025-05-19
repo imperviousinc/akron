@@ -1,20 +1,22 @@
-use iced::{Background, Border, Center, Element, Fill, Font, Theme, widget::{
-    Button, Column, Container, PickList, Text, TextInput, button, column,
-    pick_list as _pick_list, text_editor, text_input as _text_input,
-}, Padding};
+use iced::widget::text;
+use iced::{
+    widget::{
+        button, column, pick_list as _pick_list, text_editor, text_input as _text_input, Button,
+        Column, Container, PickList, Text, TextInput,
+    },
+    Background, Border, Center, Element, Fill, Font, Padding, Theme,
+};
 use std::borrow::Borrow;
 use std::convert::Into;
-use iced::widget::text;
 
-pub const STANDARD_PADDING_Y : f32 = 20.0;
-pub const STANDARD_PADDING_X : f32 = 20.0;
-pub const STANDARD_PADDING : Padding = Padding {
+pub const STANDARD_PADDING_Y: f32 = 20.0;
+pub const STANDARD_PADDING_X: f32 = 20.0;
+pub const STANDARD_PADDING: Padding = Padding {
     top: STANDARD_PADDING_Y,
     right: STANDARD_PADDING_X,
     bottom: STANDARD_PADDING_Y,
     left: STANDARD_PADDING_X,
 };
-
 
 pub fn text_label(text: &str) -> Text<'_> {
     Text::new(text).size(14)
@@ -75,7 +77,6 @@ where
     Message: Clone + 'a,
 {
     Button::new(content)
-
         .on_press_maybe(on_submit)
         .padding(STANDARD_PADDING)
         .width(Fill)
@@ -220,11 +221,14 @@ impl<'a, Message: 'a + Clone> From<Form<'a, Message>> for Element<'a, Message> {
         Column::from_vec(form.elements)
             .push(
                 Container::new(
-                    submit_button(text(form.submit_label).width(Fill).align_x(Center), form.submit_message)
-                    .width(Fill)
-                )
-                    .align_x(Center)
+                    submit_button(
+                        text(form.submit_label).width(Fill).align_x(Center),
+                        form.submit_message,
+                    )
                     .width(Fill),
+                )
+                .align_x(Center)
+                .width(Fill),
             )
             .spacing(10)
             .width(Fill)

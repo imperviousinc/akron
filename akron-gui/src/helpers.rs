@@ -1,7 +1,7 @@
 pub use spaces_protocol::slabel::SLabel;
 pub use spaces_wallet::{
-    Listing,
     bitcoin::{Amount, FeeRate},
+    Listing,
 };
 
 pub fn is_slabel_input(s: &str) -> bool {

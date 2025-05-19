@@ -1,6 +1,6 @@
-use iced::widget::{text, Column, Row, Container, container};
-use iced::{Color, Element, Length, Alignment, Theme};
 use iced::border::rounded;
+use iced::widget::{container, text, Column, Container, Row};
+use iced::{Alignment, Color, Element, Length, Theme};
 use spaces_client::wallets::{TxResponse, WalletResponse};
 
 #[derive(Debug, Clone)]
@@ -26,35 +26,28 @@ impl TxResultWidget {
 
     pub fn view(&self) -> Element<TxListMessage> {
         let content = if self.transactions.is_empty() {
-            Column::new()
-                .push(text("No transactions").color(Color::from_rgb8(77, 77, 77)))
+            Column::new().push(text("No transactions").color(Color::from_rgb8(77, 77, 77)))
         } else {
-            self.transactions.iter().fold(
-                Column::new().spacing(15),
-                |col, tx| {
+            self.transactions
+                .iter()
+                .fold(Column::new().spacing(15), |col, tx| {
                     let txid_short = format!(
                         "{}...{}",
                         &tx.txid.to_string()[0..8],
                         &tx.txid.to_string()[tx.txid.to_string().len() - 8..]
                     );
 
-                    let mut summary = Row::new()
-                        .spacing(10)
-                        .align_y(Alignment::Center);
+                    let mut summary = Row::new().spacing(10).align_y(Alignment::Center);
                     match &tx.error {
                         None => {
-                            summary = summary.push(
-                                text("✓ ").style(|t| text::success(t)),
-                            );
+                            summary = summary.push(text("✓ ").style(|t| text::success(t)));
                             summary = summary.push(
                                 text(format!("Transaction sent {}", txid_short))
                                     .color(Color::from_rgb8(77, 77, 77)),
                             );
                         }
                         Some(_) => {
-                            summary = summary.push(
-                                text("⚠ ").style(|t| text::danger(t)),
-                            );
+                            summary = summary.push(text("⚠ ").style(|t| text::danger(t)));
                             summary = summary.push(
                                 text(format!("Transaction failed to broadcast {}", txid_short))
                                     .color(Color::from_rgb8(77, 77, 77)),
@@ -81,8 +74,7 @@ impl TxResultWidget {
                                 .spacing(10)
                                 .align_y(Alignment::Center)
                                 .push(
-                                    text(format!("Events: {}", event_labels.join(", ")))
-                                        .size(14),
+                                    text(format!("Events: {}", event_labels.join(", "))).size(14),
                                 ),
                         )
                     } else {
@@ -90,34 +82,31 @@ impl TxResultWidget {
                     };
 
                     let error_details = tx.error.as_ref().map(|errors| {
-                        Container::new(
-                            errors.iter().fold(
-                                Column::new().spacing(5).padding([5, 10]),
-                                |col, (k, v)| {
-                                    col.push(
-                                        text(format!("{}: {}", k, v))
-                                            .color(Color::from_rgb8(77, 77, 77)),
-                                    )
-                                },
-                            ),
-                        )
-                            .width(Length::Fill)
-                            .style(|theme: &Theme| {
-                                let palette = theme.extended_palette();
-                                container::Style {
-                                    background: Some(Color::from_rgb8(255, 201, 201).into()),
-                                    border: rounded(12),
-                                    text_color: Some(palette.background.strong.text),
-                                    ..container::Style::default()
-                                }
-                            })
-                            .padding(10)
+                        Container::new(errors.iter().fold(
+                            Column::new().spacing(5).padding([5, 10]),
+                            |col, (k, v)| {
+                                col.push(
+                                    text(format!("{}: {}", k, v))
+                                        .color(Color::from_rgb8(77, 77, 77)),
+                                )
+                            },
+                        ))
+                        .width(Length::Fill)
+                        .style(|theme: &Theme| {
+                            let palette = theme.extended_palette();
+                            container::Style {
+                                background: Some(Color::from_rgb8(255, 201, 201).into()),
+                                border: rounded(12),
+                                text_color: Some(palette.background.strong.text),
+                                ..container::Style::default()
+                            }
+                        })
+                        .padding(10)
                     });
 
-                    let mut tx_col = Column::new().spacing(8).push(
-                        Container::new(summary)
-                            .width(Length::Fill),
-                    );
+                    let mut tx_col = Column::new()
+                        .spacing(8)
+                        .push(Container::new(summary).width(Length::Fill));
                     if let Some(event_row) = event_row {
                         tx_col = tx_col.push(
                             Container::new(event_row)
@@ -138,11 +127,8 @@ impl TxResultWidget {
                         tx_col = tx_col.push(error_details);
                     }
 
-                    col.push(
-                        tx_col
-                    )
-                },
-            )
+                    col.push(tx_col)
+                })
         };
 
         content.into()

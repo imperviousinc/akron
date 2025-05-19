@@ -1,6 +1,6 @@
 use iced::{
+    widget::{button, horizontal_space, text, Row},
     Center, Element, Fill, Theme,
-    widget::{Row, button, horizontal_space, text},
 };
 
 struct Tab<'a, Message> {

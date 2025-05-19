@@ -1,3 +1,4 @@
+use crate::widget::text::text_semibold;
 use crate::widget::{
     form::text_input,
     icon::{text_icon, Icon},
@@ -10,7 +11,6 @@ use iced::widget::{
 use iced::{border, font, keyboard, widget, Fill, Padding, Shrink, Theme};
 use iced::{Color, Element, Subscription, Task};
 use serde::Deserialize;
-use crate::widget::text::text_semibold;
 
 #[derive(Default, Debug)]
 pub struct FeeRateSelector {
@@ -299,7 +299,7 @@ impl FeeRateSelector {
                             container::Style {
                                 background: Some(if is_selected {
                                     // TODO: may need color adjust
-                                    Color::from_rgb8(0xFF,0xFB,0xFC).into()
+                                    Color::from_rgb8(0xFF, 0xFB, 0xFC).into()
                                 } else {
                                     palette.background.base.color.into()
                                 }),

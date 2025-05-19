@@ -1,6 +1,6 @@
 use iced::{
+    advanced::{layout, mouse, renderer, widget::Tree, Layout, Widget},
     Background, Border, Color, Element, Length, Padding, Rectangle, Size, Theme,
-    advanced::{Layout, Widget, layout, mouse, renderer, widget::Tree},
 };
 
 pub struct Rect<'a, Theme = iced::Theme>
