@@ -70,6 +70,7 @@ pub struct State {
 #[derive(Debug, Clone)]
 pub enum Route {
     Home,
+    Transactions,
     Send,
     Receive,
     Spaces,
@@ -220,6 +221,10 @@ impl State {
                     self.get_wallet_spaces(),
                     self.get_wallet_transactions(),
                 ])
+            }
+            Route::Transactions => {
+                self.home_screen.reset();
+                self.navigate_to(Route::Home)
             }
             Route::Send => {
                 self.screen = Screen::Send;
@@ -448,7 +453,7 @@ impl State {
                         )
                         .map(|r| Message::SendScreen(send::Message::ClientResult(r.result)))
                 }
-                send::Action::ShowTransactions => self.navigate_to(Route::Home),
+                send::Action::ShowTransactions => self.navigate_to(Route::Transactions),
                 send::Action::None => Task::none(),
             }),
             Message::ReceiveScreen(message) => {
@@ -519,7 +524,7 @@ impl State {
                             )
                             .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
                     }
-                    spaces::Action::ShowTransactions => self.navigate_to(Route::Home),
+                    spaces::Action::ShowTransactions => self.navigate_to(Route::Transactions),
                     spaces::Action::None => Task::none(),
                 })
             }
@@ -548,7 +553,7 @@ impl State {
                         )
                         .map(|r| Message::MarketScreen(market::Message::SellResult(r.result))),
                     market::Action::WriteClipboard(s) => clipboard::write(s),
-                    market::Action::ShowTransactions => self.navigate_to(Route::Home),
+                    market::Action::ShowTransactions => self.navigate_to(Route::Transactions),
                     market::Action::None => Task::none(),
                 })
             }
