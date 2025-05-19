@@ -1,12 +1,12 @@
-use std::time::Duration;
+use crate::services::spaces;
+use crate::services::yuki;
 use anyhow::Context;
 use log::info;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
-use tokio::{select};
+use tokio::select;
 use tokio::sync::broadcast;
-use crate::services::yuki;
-use crate::services::spaces;
 
 pub struct ServiceRunner {
     attach_addr: Option<String>,
@@ -41,8 +41,7 @@ impl ServiceRunner {
     }
 
     pub fn run(self) -> anyhow::Result<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("Failed to build tokio runtime");
+        let rt = tokio::runtime::Runtime::new().expect("Failed to build tokio runtime");
 
         rt.block_on(async {
             let sigterm = tokio::signal::ctrl_c();
@@ -80,39 +79,39 @@ impl ServiceRunner {
 
             loop {
                 select! {
-                _ = shutdown_rx.recv() => {
-                    info!("{}: shutdown requested, exiting …", kind.as_str());
-                    return;
+                  _ = shutdown_rx.recv() => {
+                      info!("{}: shutdown requested, exiting …", kind.as_str());
+                      return;
+                  }
+                  result = stream.read(&mut buf) => match result {
+                      Ok(0) => {
+                          info!("{}: parent disconnected, exiting …", kind.as_str());
+                          let _ = shutdown.send(());
+                          return;
+                      }
+                      Err(e) => {
+                          info!("{}: read error {:?}, exiting …", kind.as_str(), e);
+                          let _ = shutdown.send(());
+                          return;
+                      }
+                      Ok(_) => {
+                          match ServiceCommand::from_byte(buf[0]) {
+                              Some(ServiceCommand::Ping) => {
+                                  // do your ping logic
+                                  tokio::time::sleep(Duration::from_millis(20)).await;
+                              }
+                              Some(ServiceCommand::Shutdown) => {
+                                  info!("{}: shutdown command requested", kind.as_str());
+                                  let _ = shutdown.send(());
+                                  return;
+                              }
+                              None => {
+                                  info!("{}: unknown command {}, ignoring", kind.as_str(), buf[0]);
+                              }
+                          }
+                      }
+                  }
                 }
-                result = stream.read(&mut buf) => match result {
-                    Ok(0) => {
-                        info!("{}: parent disconnected, exiting …", kind.as_str());
-                        let _ = shutdown.send(());
-                        return;
-                    }
-                    Err(e) => {
-                        info!("{}: read error {:?}, exiting …", kind.as_str(), e);
-                        let _ = shutdown.send(());
-                        return;
-                    }
-                    Ok(_) => {
-                        match ServiceCommand::from_byte(buf[0]) {
-                            Some(ServiceCommand::Ping) => {
-                                // do your ping logic
-                                tokio::time::sleep(Duration::from_millis(20)).await;
-                            }
-                            Some(ServiceCommand::Shutdown) => {
-                                info!("{}: shutdown command requested", kind.as_str());
-                                let _ = shutdown.send(());
-                                return;
-                            }
-                            None => {
-                                info!("{}: unknown command {}, ignoring", kind.as_str(), buf[0]);
-                            }
-                        }
-                    }
-                }
-              }
             }
         });
 
@@ -136,7 +135,6 @@ impl ServiceKind {
         }
     }
 }
-
 
 impl ServiceCommand {
     pub(crate) fn to_byte(&self) -> u8 {

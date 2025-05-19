@@ -146,7 +146,9 @@ impl Client {
                     }
                     ExtendedNetwork::Testnet4 => {
                         yuki_args.push("--broadcast-endpoint".to_string());
-                        yuki_args.push("https://testnet4.broadcastmempoolcheck.akron.io/testnet4".to_string());
+                        yuki_args.push(
+                            "https://testnet4.broadcastmempoolcheck.akron.io/testnet4".to_string(),
+                        );
                     }
                     _ => {}
                 }

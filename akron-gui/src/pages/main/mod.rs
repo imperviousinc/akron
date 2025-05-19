@@ -23,7 +23,7 @@ use crate::{
     widget::{
         fee_rate::{FeeRateMessage, FeeRateSelector},
         icon::{text_icon, Icon},
-        text::{text_small},
+        text::text_small,
     },
     Config,
 };
@@ -735,12 +735,16 @@ impl State {
     pub fn main_view(&self) -> Element<Message> {
         let navbar_button = |label, icon: Icon, route: Route, screen: Screen| {
             let button = button(
-                row![if self.screen == screen {
-                    text_icon(icon).size(20).style(text::primary) } else {
-                    text_icon(icon).size(20)
-                }, text(label).size(16)]
-                    .spacing(10)
-                    .align_y(Center),
+                row![
+                    if self.screen == screen {
+                        text_icon(icon).size(20).style(text::primary)
+                    } else {
+                        text_icon(icon).size(20)
+                    },
+                    text(label).size(16)
+                ]
+                .spacing(10)
+                .align_y(Center),
             )
             .style(move |theme: &Theme, status: button::Status| {
                 let mut style = if self.screen == screen {
@@ -783,100 +787,114 @@ impl State {
                 .width(200),
                 vertical_rule(3),
                 Column::new()
-                .height(Fill)
-                .width(Fill)
-                .push_maybe(self.wallets.get_current().and_then(|wallet| {
-                if !wallet.is_synced() {
-                    Some(
-                        Stack::new()
-                            .push(container(
-                                progress_bar(0.0..=1.0, wallet.sync_status_percentage()
-                                ).style(|t| {
-                                    let mut style = progress_bar::primary(t);
-                                    let p = t.extended_palette();
-                                    style.bar = p.primary.weak.color.into();
-                                    style
-                                }).height(Fill)).height(40))
-                            .push(center(text(format!(
-                                "{} ({:.1}%)",
-                                wallet.sync_status_string(),
-                                wallet.sync_status_percentage() * 100.0,
-                            )).size(14))),
+                    .height(Fill)
+                    .width(Fill)
+                    .push_maybe(self.wallets.get_current().and_then(|wallet| {
+                        if !wallet.is_synced() {
+                            Some(
+                                Stack::new()
+                                    .push(
+                                        container(
+                                            progress_bar(
+                                                0.0..=1.0,
+                                                wallet.sync_status_percentage(),
+                                            )
+                                            .style(|t| {
+                                                let mut style = progress_bar::primary(t);
+                                                let p = t.extended_palette();
+                                                style.bar = p.primary.weak.color.into();
+                                                style
+                                            })
+                                            .height(Fill),
+                                        )
+                                        .height(40),
+                                    )
+                                    .push(center(
+                                        text(format!(
+                                            "{} ({:.1}%)",
+                                            wallet.sync_status_string(),
+                                            wallet.sync_status_percentage() * 100.0,
+                                        ))
+                                        .size(14),
+                                    )),
+                            )
+                        } else {
+                            None
+                        }
+                    }))
+                    .push(
+                        container(match &self.screen {
+                            Screen::Home =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.home_screen
+                                        .view(
+                                            self.tip_height,
+                                            wallet.state.balance,
+                                            &wallet.state.transactions,
+                                        )
+                                        .map(Message::HomeScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Send =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.send_screen
+                                        .view(&wallet.state.owned_spaces)
+                                        .map(Message::SendScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Receive =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.receive_screen
+                                        .view(
+                                            wallet.state.coin_address.as_ref(),
+                                            wallet.state.space_address.as_ref(),
+                                        )
+                                        .map(Message::ReceiveScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Spaces =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.spaces_screen
+                                        .view(
+                                            self.tip_height,
+                                            &self.spaces,
+                                            &wallet.state.winning_spaces,
+                                            &wallet.state.outbid_spaces,
+                                            &wallet.state.owned_spaces,
+                                        )
+                                        .map(Message::SpacesScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Market =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.market_screen
+                                        .view(wallet.state.owned_spaces.as_ref())
+                                        .map(Message::MarketScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Sign =>
+                                if let Some(wallet) = self.wallets.get_current() {
+                                    self.sign_screen
+                                        .view(&wallet.state.owned_spaces)
+                                        .map(Message::SignScreen)
+                                } else {
+                                    center("No wallet loaded").into()
+                                },
+                            Screen::Settings => self
+                                .settings_screen
+                                .view(
+                                    self.wallets.get_wallets(),
+                                    self.wallets.get_current().map(|w| w.label),
+                                )
+                                .map(Message::SettingsScreen),
+                        })
+                        .height(Fill)
                     )
-                } else {
-                    None
-                }
-            }))
-                .push(container(match &self.screen {
-                    Screen::Home =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.home_screen
-                                .view(
-                                    self.tip_height,
-                                    wallet.state.balance,
-                                    &wallet.state.transactions,
-                                )
-                                .map(Message::HomeScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Send =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.send_screen
-                                .view(&wallet.state.owned_spaces)
-                                .map(Message::SendScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Receive =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.receive_screen
-                                .view(
-                                    wallet.state.coin_address.as_ref(),
-                                    wallet.state.space_address.as_ref(),
-                                )
-                                .map(Message::ReceiveScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Spaces =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.spaces_screen
-                                .view(
-                                    self.tip_height,
-                                    &self.spaces,
-                                    &wallet.state.winning_spaces,
-                                    &wallet.state.outbid_spaces,
-                                    &wallet.state.owned_spaces,
-                                )
-                                .map(Message::SpacesScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Market =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.market_screen
-                                .view(wallet.state.owned_spaces.as_ref())
-                                .map(Message::MarketScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Sign =>
-                        if let Some(wallet) = self.wallets.get_current() {
-                            self.sign_screen
-                                .view(&wallet.state.owned_spaces)
-                                .map(Message::SignScreen)
-                        } else {
-                            center("No wallet loaded").into()
-                        },
-                    Screen::Settings => self
-                        .settings_screen
-                        .view(
-                            self.wallets.get_wallets(),
-                            self.wallets.get_current().map(|w| w.label),
-                        )
-                        .map(Message::SettingsScreen),
-                }).height(Fill))
             ])
             .push_maybe(self.logs_view())
             .into()

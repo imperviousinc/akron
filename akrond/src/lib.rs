@@ -1,22 +1,22 @@
 use futures_util::stream::StreamExt;
 
-use std::env;
-use std::env::temp_dir;
-use std::path::PathBuf;
-use tokio::process::{Child, Command};
-use std::time::Duration;
+use crate::runner::{ServiceCommand, ServiceKind};
 use anyhow::{anyhow, Context};
 use log::{error, info};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::{select};
-use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::time::interval;
-use crate::runner::{ServiceCommand, ServiceKind};
-use std::process::Stdio;
 use reqwest::Client;
 use spaces_client::jsonrpsee::core::__reexports::serde_json;
 use spaces_client::rpc::RootAnchor;
+use std::env;
+use std::env::temp_dir;
+use std::path::PathBuf;
+use std::process::Stdio;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::process::{Child, Command};
+use tokio::select;
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::time::interval;
 
 pub mod runner;
 pub mod services;
@@ -51,7 +51,6 @@ struct Service {
     pub(crate) child: Child,
 }
 
-
 impl Akron {
     pub fn create(capture_logs: bool) -> (Self, broadcast::Sender<()>) {
         let (stream_tx, rx) = mpsc::channel::<AkronCommand>(20);
@@ -70,9 +69,7 @@ impl Akron {
                 .enable_all()
                 .build()
                 .expect("Failed to start Tokio runtime")
-                .block_on(async move {
-                    Self::handle_services(rx, task_shutdown, task_logs).await
-                });
+                .block_on(async move { Self::handle_services(rx, task_shutdown, task_logs).await });
             if let Err(e) = result {
                 error!("Runtime exited with error: {}", e);
                 _ = err_shutdown.send(());
@@ -95,11 +92,14 @@ impl Akron {
         tokio::fs::create_dir_all(data_dir).await?;
         let checkpoint_init = data_dir.join("akron.checkpoint.json");
         if checkpoint_init.exists() {
-            let checkpoint : RootAnchor =
+            let checkpoint: RootAnchor =
                 serde_json::from_slice(&tokio::fs::read(&checkpoint_init).await?)
                     .map_err(|e| anyhow!("Could not deserialize checkpoint file: {}", e))?;
 
-            info!("Starting from loaded prune height: {}", checkpoint.block.height);
+            info!(
+                "Starting from loaded prune height: {}",
+                checkpoint.block.height
+            );
             return Ok(checkpoint);
         }
 
@@ -116,14 +116,16 @@ impl Akron {
 
         // Check if request was successful
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!("HTTP request failed with status: {}", response.status()));
+            return Err(anyhow::anyhow!(
+                "HTTP request failed with status: {}",
+                response.status()
+            ));
         }
 
         // Get content length for progress tracking (if available)
         let total = response
             .content_length()
             .context("Failed to get content length, does the path exist?")?;
-
 
         let mut file = tokio::fs::File::create(spaces_path.clone())
             .await
@@ -140,7 +142,9 @@ impl Akron {
             downloaded += chunk.len() as u64;
 
             if let Some(progress) = progress.as_mut() {
-                _ = progress.send(CheckpointProgress { downloaded, total }).await;
+                _ = progress
+                    .send(CheckpointProgress { downloaded, total })
+                    .await;
             }
         }
 
@@ -155,10 +159,13 @@ impl Akron {
             }
             _ = std::fs::remove_file(tmp);
             Ok(anchors.remove(0))
-        }).await.expect("Could not spawn task")?;
+        })
+        .await
+        .expect("Could not spawn task")?;
 
         let content = serde_json::to_string(&root_anchor)?;
-        tokio::fs::write(checkpoint_init, content).await
+        tokio::fs::write(checkpoint_init, content)
+            .await
             .map_err(|e| anyhow!("Could not write checkpoint init file: {}", e))?;
 
         Ok(root_anchor)
@@ -166,30 +173,33 @@ impl Akron {
 
     pub async fn start(&self, kind: ServiceKind, args: Vec<String>) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.stream_tx.send(AkronCommand::SpawnService {
-            kind,
-            args,
-            oneshot: tx,
-        }).await.map_err(|e|
-            anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?;
+        self.stream_tx
+            .send(AkronCommand::SpawnService {
+                kind,
+                args,
+                oneshot: tx,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?;
         rx.await
             .map_err(|e| anyhow::anyhow!("Could not spawn service {}: {}", kind.as_str(), e))?
     }
 
     pub async fn shutdown(&self, kind: ServiceKind) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.stream_tx.send(AkronCommand::Shutdown {
-            kind,
-            oneshot: tx,
-        }).await.map_err(|e|
-            anyhow::anyhow!("Could not shutdown service {}: {}", kind.as_str(), e))?;
+        self.stream_tx
+            .send(AkronCommand::Shutdown { kind, oneshot: tx })
+            .await
+            .map_err(|e| anyhow::anyhow!("Could not shutdown service {}: {}", kind.as_str(), e))?;
         rx.await
             .map_err(|e| anyhow::anyhow!("Could not shutdown service {}: {}", kind.as_str(), e))?
     }
 
-    async fn handle_services(mut rx: mpsc::Receiver<AkronCommand>,
-                             shutdown: broadcast::Sender<()>,
-                             logs_tx: Option<broadcast::Sender<String>>) -> anyhow::Result<()> {
+    async fn handle_services(
+        mut rx: mpsc::Receiver<AkronCommand>,
+        shutdown: broadcast::Sender<()>,
+        logs_tx: Option<broadcast::Sender<String>>,
+    ) -> anyhow::Result<()> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .context("Failed to bind TCP listener")?;
@@ -225,7 +235,11 @@ impl Akron {
         logs_tx: &Option<broadcast::Sender<String>>,
     ) -> anyhow::Result<()> {
         match cmd {
-            AkronCommand::SpawnService { kind, args, oneshot } => {
+            AkronCommand::SpawnService {
+                kind,
+                args,
+                oneshot,
+            } => {
                 match Self::handle_start_service(&listener, kind, args, logs_tx.clone()).await {
                     Ok(service) => {
                         // Remove existing ones
@@ -273,11 +287,13 @@ impl Akron {
             .args(&args);
 
         if log_tx.is_some() {
-            command.stdin(Stdio::inherit())
+            command
+                .stdin(Stdio::inherit())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
         } else {
-            command.stdin(Stdio::inherit())
+            command
+                .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit());
         }
@@ -319,14 +335,23 @@ impl Akron {
 
 impl Service {
     pub async fn ping(&mut self) -> bool {
-        self.stream.write(&[ServiceCommand::Ping.to_byte()]).await.is_ok()
+        self.stream
+            .write(&[ServiceCommand::Ping.to_byte()])
+            .await
+            .is_ok()
     }
     pub async fn shutdown(&mut self) -> bool {
-        self.stream.write(&[ServiceCommand::Shutdown.to_byte()]).await.is_ok()
+        self.stream
+            .write(&[ServiceCommand::Shutdown.to_byte()])
+            .await
+            .is_ok()
     }
 }
 
-async fn redirect_logs<R: tokio::io::AsyncRead + Unpin + Send + 'static>(tx: broadcast::Sender<String>, reader: R) {
+async fn redirect_logs<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
+    tx: broadcast::Sender<String>,
+    reader: R,
+) {
     // remove colors
     let r = regex::Regex::new(r"\x1b\[[0-9;]*[mK]").expect("regex");
     let mut lines = BufReader::new(reader).lines();

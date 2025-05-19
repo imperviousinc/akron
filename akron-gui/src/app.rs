@@ -1,5 +1,5 @@
-use iced::{application, theme, window, Color, Element, Font, Subscription, Task};
 use crate::{pages::*, Config};
+use iced::{application, theme, window, Color, Element, Font, Subscription, Task};
 
 #[derive(Debug)]
 pub enum State {
@@ -47,12 +47,12 @@ impl State {
                     "Bitcoin".into(),
                     theme::Palette {
                         text: Color::from_rgb8(0, 0, 0),
-                        primary: Color::from_rgb8(0xFD,0x9E,0xB2),
+                        primary: Color::from_rgb8(0xFD, 0x9E, 0xB2),
                         ..theme::Palette::LIGHT
                     },
                     |pallete| {
                         let mut pallete = theme::palette::Extended::generate(pallete);
-                        pallete.primary.base.text = Color::from_rgb8(0xFD,0x9E,0xB2);
+                        pallete.primary.base.text = Color::from_rgb8(0xFD, 0x9E, 0xB2);
                         pallete.primary.base.text = Color::WHITE;
                         pallete.primary.strong.text = Color::WHITE;
                         pallete.primary.weak.text = Color::WHITE;

@@ -1,27 +1,27 @@
+use crate::widget::base::{base_container, result_column};
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 use crate::{
     helpers::*,
     widget::{
         form::Form,
-        icon::{Icon, button_icon},
+        icon::{button_icon, Icon},
         tabs::TabsRow,
         text::{text_big, text_monospace},
     },
 };
 use iced::{
-    Border, Element, Fill, Theme,
     widget::{column, container, row, text_editor},
+    Border, Element, Fill, Theme,
 };
 use spaces_client::wallets::WalletResponse;
 use spaces_wallet::bdk_wallet::serde_json;
-use crate::widget::base::{base_container, result_column};
-use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug, Default)]
 pub struct BuyState {
     listing: text_editor::Content,
     fee_rate: String,
     error: Option<String>,
-    tx_result: Option<TxResultWidget>
+    tx_result: Option<TxResultWidget>,
 }
 
 #[derive(Debug, Default)]
@@ -62,13 +62,8 @@ pub enum Message {
 #[derive(Debug, Clone)]
 pub enum Action {
     None,
-    Buy {
-        listing: Listing,
-    },
-    Sell {
-        slabel: SLabel,
-        price: Amount,
-    },
+    Buy { listing: Listing },
+    Sell { slabel: SLabel, price: Amount },
     WriteClipboard(String),
     ShowTransactions,
 }
@@ -93,7 +88,7 @@ impl State {
             Self::Buy(state) => {
                 state.error = None;
                 state.tx_result = None;
-            },
+            }
             Self::Sell(state) => state.error = None,
         }
         match message {
@@ -133,7 +128,7 @@ impl State {
                     return Action::None;
                 }
                 Action::ShowTransactions
-            },
+            }
             Message::BuyResult(Err(err)) => {
                 if let Self::Buy(state) = self {
                     state.error = Some(err);
@@ -173,75 +168,83 @@ impl State {
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
         base_container(
-        column![
-            TabsRow::new()
-                .add_tab("Buy", matches!(self, Self::Buy(_)), Message::BuyTabPress,)
-                .add_tab("Sell", matches!(self, Self::Sell(_)), Message::SellTabPress,),
-            match self {
-                Self::Buy(state) => {
-                    column![
-                        text_big("Buy space"),
-                        result_column(
-                            state.error.as_ref(),
-                            state.tx_result.as_ref()
-                            .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
-                            [Form::new("Buy",
-                            (listing_from_str(&state.listing.text()).is_some()
-                                && fee_rate_from_str(&state.fee_rate).is_some())
-                            .then_some(Message::BuySubmit))
-                            .add_text_editor("Listing", "JSON", &state.listing, Message::ListingAction)
-                                .into()
-                            ]
-                        ).spacing(40),
-                    ].spacing(40)
+            column![
+                TabsRow::new()
+                    .add_tab("Buy", matches!(self, Self::Buy(_)), Message::BuyTabPress,)
+                    .add_tab("Sell", matches!(self, Self::Sell(_)), Message::SellTabPress,),
+                match self {
+                    Self::Buy(state) => {
+                        column![
+                            text_big("Buy space"),
+                            result_column(
+                                state.error.as_ref(),
+                                state
+                                    .tx_result
+                                    .as_ref()
+                                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                                [Form::new(
+                                    "Buy",
+                                    (listing_from_str(&state.listing.text()).is_some()
+                                        && fee_rate_from_str(&state.fee_rate).is_some())
+                                    .then_some(Message::BuySubmit)
+                                )
+                                .add_text_editor(
+                                    "Listing",
+                                    "JSON",
+                                    &state.listing,
+                                    Message::ListingAction
+                                )
+                                .into()]
+                            )
+                            .spacing(40),
+                        ]
+                        .spacing(40)
+                    }
+                    Self::Sell(state) => {
+                        column![
+                            text_big("Sell space"),
+                            result_column(
+                                state.error.as_ref(),
+                                None,
+                                [Form::new(
+                                    "Generate Listing",
+                                    (state.space.is_some()
+                                        && amount_from_str(&state.price).is_some())
+                                    .then_some(Message::SellSubmit),
+                                )
+                                .add_pick_list(
+                                    "Space",
+                                    owned_spaces.as_slice(),
+                                    state.space.as_ref(),
+                                    Message::SLabelSelect,
+                                )
+                                .add_text_input("Price", "sat", &state.price, Message::PriceInput,)
+                                .into(),]
+                            ),
+                        ]
+                        .push_maybe(state.listing.as_ref().map(|listing| {
+                            container(row![
+                                text_monospace(listing).width(Fill),
+                                button_icon(Icon::Copy).on_press(Message::CopyPress)
+                            ])
+                            .padding(10)
+                            .style(|theme: &Theme| {
+                                let palette = theme.extended_palette();
+                                container::Style::default()
+                                    .background(palette.background.base.color)
+                                    .border(Border {
+                                        radius: 6.0.into(),
+                                        width: 1.0,
+                                        color: palette.background.strong.color,
+                                    })
+                            })
+                        }))
+                        .spacing(40)
+                    }
                 }
-                Self::Sell(state) => {
-                    column![
-                        text_big("Sell space"),
-                        result_column(
-                            state.error.as_ref(),
-                            None,
-                            [
-                                Form::new(
-                            "Generate Listing",
-                            (state.space.is_some() && amount_from_str(&state.price).is_some())
-                                .then_some(Message::SellSubmit),
-                        )
-                        .add_pick_list(
-                            "Space",
-                            owned_spaces.as_slice(),
-                            state.space.as_ref(),
-                            Message::SLabelSelect,
-                        )
-                        .add_text_input(
-                            "Price",
-                            "sat",
-                            &state.price,
-                            Message::PriceInput,
-                        ).into(),
-                            ]),
-
-                    ]
-                    .push_maybe(state.listing.as_ref().map(|listing| {
-                        container(row![
-                            text_monospace(listing).width(Fill),
-                            button_icon(Icon::Copy).on_press(Message::CopyPress)
-                        ]).padding(10)
-                        .style(|theme: &Theme| {
-                            let palette = theme.extended_palette();
-                            container::Style::default()
-                                .background(palette.background.base.color)
-                                .border(Border {
-                                    radius: 6.0.into(),
-                                    width: 1.0,
-                                    color: palette.background.strong.color,
-                                })
-                        })
-                    })).spacing(40)
-                }
-            }
-            .spacing(40)
-        ].spacing(40)
+                .spacing(40)
+            ]
+            .spacing(40),
         )
         .into()
     }

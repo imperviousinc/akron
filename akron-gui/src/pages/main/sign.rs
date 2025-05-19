@@ -1,12 +1,9 @@
+use crate::widget::base::{base_container, result_column};
 use crate::{
     client::*,
-    widget::{
-        form::Form,
-        text::{text_big},
-    },
+    widget::{form::Form, text::text_big},
 };
-use iced::{Element, widget::column};
-use crate::widget::base::{base_container, result_column};
+use iced::{widget::column, Element};
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -65,32 +62,33 @@ impl State {
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
         base_container(
-        column![
-            text_big("Sign Nostr event"),
-            result_column(
-                self.error.as_ref(),
-                None,
-                [
-                    Form::new(
-                "Save",
-                (self.slabel.is_some() && self.event.is_some()).then_some(Message::SignSubmit),
-            )
-            .add_pick_list(
-                "Space",
-                owned_spaces.as_slice(),
-                self.slabel.as_ref(),
-                Message::SLabelSelect
-            )
-            .add_text_button(
-                "Nostr event",
-                "JSON file",
-                self.event.as_ref().map_or("", |p| &p.0),
-                Message::PathPress,
-            ).into()
-                ]
-            ).spacing(40),
-        ]
-        .spacing(40)
+            column![
+                text_big("Sign Nostr event"),
+                result_column(
+                    self.error.as_ref(),
+                    None,
+                    [Form::new(
+                        "Save",
+                        (self.slabel.is_some() && self.event.is_some())
+                            .then_some(Message::SignSubmit),
+                    )
+                    .add_pick_list(
+                        "Space",
+                        owned_spaces.as_slice(),
+                        self.slabel.as_ref(),
+                        Message::SLabelSelect
+                    )
+                    .add_text_button(
+                        "Nostr event",
+                        "JSON file",
+                        self.event.as_ref().map_or("", |p| &p.0),
+                        Message::PathPress,
+                    )
+                    .into()]
+                )
+                .spacing(40),
+            ]
+            .spacing(40),
         )
         .into()
     }

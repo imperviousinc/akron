@@ -1,17 +1,13 @@
+use iced::widget::column;
 use iced::Element;
-use iced::widget::{column};
 
+use crate::widget::base::{base_container, result_column};
+use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 use crate::{
     client::*,
     helpers::*,
-    widget::{
-        form::Form,
-        tabs::TabsRow,
-        text::{text_big},
-    },
+    widget::{form::Form, tabs::TabsRow, text::text_big},
 };
-use crate::widget::base::{base_container, result_column};
-use crate::widget::tx_result::{TxListMessage, TxResultWidget};
 
 #[derive(Debug)]
 pub struct State {
@@ -20,7 +16,7 @@ pub struct State {
     amount: String,
     slabel: Option<SLabel>,
     error: Option<String>,
-    tx_result: Option<TxResultWidget>
+    tx_result: Option<TxResultWidget>,
 }
 
 impl Default for State {
@@ -48,17 +44,10 @@ pub enum Message {
     TxResult(TxListMessage),
 }
 
-
 pub enum Action {
     None,
-    SendCoins {
-        recipient: String,
-        amount: Amount,
-    },
-    SendSpace {
-        recipient: String,
-        slabel: SLabel,
-    },
+    SendCoins { recipient: String, amount: Amount },
+    SendSpace { recipient: String, slabel: SLabel },
     ShowTransactions,
 }
 
@@ -96,18 +85,14 @@ impl State {
                 self.slabel = Some(slabel);
                 Action::None
             }
-            Message::SendCoinsSubmit => {
-                Action::SendCoins {
-                    recipient: recipient_from_str(&self.recipient).unwrap(),
-                    amount: amount_from_str(&self.amount).unwrap(),
-                }
-            }
-            Message::SendSpaceSubmit => {
-                Action::SendSpace {
-                    slabel: self.slabel.clone().unwrap(),
-                    recipient: recipient_from_str(&self.recipient).unwrap(),
-                }
-            }
+            Message::SendCoinsSubmit => Action::SendCoins {
+                recipient: recipient_from_str(&self.recipient).unwrap(),
+                amount: amount_from_str(&self.amount).unwrap(),
+            },
+            Message::SendSpaceSubmit => Action::SendSpace {
+                slabel: self.slabel.clone().unwrap(),
+                recipient: recipient_from_str(&self.recipient).unwrap(),
+            },
             Message::ClientResult(Ok(w)) => {
                 if w.result.iter().any(|r| r.error.is_some()) {
                     self.tx_result = Some(TxResultWidget::new(w));
@@ -131,71 +116,74 @@ impl State {
 
     pub fn view<'a>(&'a self, owned_spaces: &'a Vec<SLabel>) -> Element<'a, Message> {
         base_container(
-        column![
-            TabsRow::new()
-                .add_tab(
-                    "Coins",
-                    matches!(self.asset_kind, AddressKind::Coin),
-                    Message::TabPress(AddressKind::Coin)
-                )
-                .add_tab(
-                    "Spaces",
-                    matches!(self.asset_kind, AddressKind::Space),
-                    Message::TabPress(AddressKind::Space)
-                ),
-            match self.asset_kind {
-                AddressKind::Coin => column![
-                    text_big("Send Bitcoin"),
-                    result_column(
-                        self.error.as_ref(),
-                        self.tx_result
-                    .as_ref()
-                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),[
-                    Form::new(
-                        "Send",
-                        (recipient_from_str(&self.recipient).is_some()
-                            && amount_from_str(&self.amount).is_some())
-                        .then_some(Message::SendCoinsSubmit),
+            column![
+                TabsRow::new()
+                    .add_tab(
+                        "Coins",
+                        matches!(self.asset_kind, AddressKind::Coin),
+                        Message::TabPress(AddressKind::Coin)
                     )
-                    .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
-                    .add_text_input(
-                        "To",
-                        "bitcoin address or @space",
-                        &self.recipient,
-                        Message::RecipientInput,).into()
-                    ]),
-                ],
-                AddressKind::Space => column![
-                    text_big("Send space"),
-                    result_column(
-                        self.error.as_ref(),
-                        self.tx_result
-                    .as_ref()
-                    .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),[
-                             Form::new(
-                        "Send",
-                        (recipient_from_str(&self.recipient).is_some()
-                            && self.slabel.is_some())
-                        .then_some(Message::SendSpaceSubmit),
-                    )
-                    .add_pick_list(
-                        "Space",
-                        owned_spaces.as_slice(),
-                        self.slabel.as_ref(),
-                        Message::SLabelSelect
-                    )
-                    .add_text_input(
-                        "To",
-                        "bitcoin address or @space",
-                        &self.recipient,
-                        Message::RecipientInput,
-                    ).into()
-                    ]),
-
-                ],
-            }
-            .spacing(40)
-        ].spacing(40)
+                    .add_tab(
+                        "Spaces",
+                        matches!(self.asset_kind, AddressKind::Space),
+                        Message::TabPress(AddressKind::Space)
+                    ),
+                match self.asset_kind {
+                    AddressKind::Coin => column![
+                        text_big("Send Bitcoin"),
+                        result_column(
+                            self.error.as_ref(),
+                            self.tx_result
+                                .as_ref()
+                                .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                            [Form::new(
+                                "Send",
+                                (recipient_from_str(&self.recipient).is_some()
+                                    && amount_from_str(&self.amount).is_some())
+                                .then_some(Message::SendCoinsSubmit),
+                            )
+                            .add_text_input("Amount", "sat", &self.amount, Message::AmountInput)
+                            .add_text_input(
+                                "To",
+                                "bitcoin address or @space",
+                                &self.recipient,
+                                Message::RecipientInput,
+                            )
+                            .into()]
+                        ),
+                    ],
+                    AddressKind::Space => column![
+                        text_big("Send space"),
+                        result_column(
+                            self.error.as_ref(),
+                            self.tx_result
+                                .as_ref()
+                                .map(|tx| TxResultWidget::view(tx).map(Message::TxResult)),
+                            [Form::new(
+                                "Send",
+                                (recipient_from_str(&self.recipient).is_some()
+                                    && self.slabel.is_some())
+                                .then_some(Message::SendSpaceSubmit),
+                            )
+                            .add_pick_list(
+                                "Space",
+                                owned_spaces.as_slice(),
+                                self.slabel.as_ref(),
+                                Message::SLabelSelect
+                            )
+                            .add_text_input(
+                                "To",
+                                "bitcoin address or @space",
+                                &self.recipient,
+                                Message::RecipientInput,
+                            )
+                            .into()]
+                        ),
+                    ],
+                }
+                .spacing(40)
+            ]
+            .spacing(40),
         )
         .into()
     }

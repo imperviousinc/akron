@@ -1,7 +1,12 @@
-use iced::{widget::{button, center, column, container, row}, Bottom, Center, Element, Fill, Task, Theme};
 use iced::widget::text;
+use iced::{
+    widget::{button, center, column, container, row},
+    Bottom, Center, Element, Fill, Task, Theme,
+};
 use spaces_client::config::ExtendedNetwork;
 
+use crate::widget::base::base_container;
+use crate::widget::text::text_semibold;
 use crate::{
     client::{Client, ClientResult},
     widget::{
@@ -11,8 +16,6 @@ use crate::{
     },
     Config, ConfigBackend,
 };
-use crate::widget::base::base_container;
-use crate::widget::text::text_semibold;
 
 #[derive(Debug)]
 pub struct State {
@@ -237,7 +240,7 @@ impl State {
     }
 
     pub fn view(&self) -> Element<Message> {
-        const DESCRIPTION_TEXT_HEIGHT : u16 = 100;
+        const DESCRIPTION_TEXT_HEIGHT: u16 = 100;
 
         container(if self.config.backend.is_none() {
             column![

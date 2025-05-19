@@ -1,8 +1,8 @@
 use iced::widget::qr_code::Data as QrCode;
 
 use spaces_client::wallets::{TxInfo, WalletInfoWithProgress, WalletStatus};
-use spaces_protocol::{Covenant, FullSpaceOut, slabel::SLabel, SpaceOut};
 use spaces_protocol::bitcoin::XOnlyPublicKey;
+use spaces_protocol::{slabel::SLabel, Covenant, FullSpaceOut, SpaceOut};
 use spaces_wallet::bitcoin::{Amount, OutPoint};
 
 #[derive(Debug)]
@@ -76,28 +76,22 @@ impl WalletEntry<'_> {
         self.state
             .info
             .as_ref()
-            .is_some_and(|info|
-                matches!(info.sync.status, WalletStatus::Complete))
+            .is_some_and(|info| matches!(info.sync.status, WalletStatus::Complete))
     }
 
     pub fn sync_status_string(&self) -> &'static str {
         if let Some(info) = self.state.info.as_ref() {
             match info.sync.status {
                 WalletStatus::HeadersSync => "Syncing block headers",
-                WalletStatus::ChainSync  => "Syncing chain",
+                WalletStatus::ChainSync => "Syncing chain",
                 WalletStatus::SpacesSync => "Syncing spaces",
                 WalletStatus::CbfFilterSync => "Syncing filters",
                 WalletStatus::CbfProcessFilters => "Processing filters",
-                WalletStatus::CbfDownloadMatchingBlocks => {
-                    "Downloading matching blocks"
-                }
-                WalletStatus::CbfProcessMatchingBlocks => {
-                    "Processing matching blocks"
-                }
+                WalletStatus::CbfDownloadMatchingBlocks => "Downloading matching blocks",
+                WalletStatus::CbfProcessMatchingBlocks => "Processing matching blocks",
                 WalletStatus::Syncing => "Syncing",
                 WalletStatus::CbfApplyUpdate => "Applying compact filters update",
                 WalletStatus::Complete => "Synced",
-
             }
         } else {
             "Loading"
@@ -105,7 +99,9 @@ impl WalletEntry<'_> {
     }
 
     pub fn sync_status_percentage(&self) -> f32 {
-        self.state.info.as_ref()
+        self.state
+            .info
+            .as_ref()
             .map(|state| state.sync.progress.unwrap_or(state.info.progress))
             .unwrap_or(0.0)
     }
