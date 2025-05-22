@@ -108,7 +108,31 @@ jobs:
           chmod +x ${{ env.BUNDLE_NAME }}/Akron.app/Contents/MacOS/akron-gui
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --deep --timestamp ${{ env.BUNDLE_NAME }}/Akron.app
           codesign --verify --verbose ${{ env.BUNDLE_NAME }}/Akron.app
-          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }} ${{ env.BUNDLE_NAME }}.zip 
+          
+          # Submit for notarization
+          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }}/Akron.app ${{ env.BUNDLE_NAME }}-notarization.zip
+          echo "Submitting app for notarization..."
+          xcrun notarytool submit ${{ env.BUNDLE_NAME }}-notarization.zip \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APP_SPECIFIC_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --wait \
+            --timeout 30m
+          
+          # Staple the notarization ticket to the app
+          echo "Stapling notarization ticket..."
+          xcrun stapler staple ${{ env.BUNDLE_NAME }}/Akron.app
+
+          # Verify the stapling
+          echo "Verifying stapled app..."
+          xcrun stapler validate ${{ env.BUNDLE_NAME }}/Akron.app
+          spctl -a -vvv -t install ${{ env.BUNDLE_NAME }}/Akron.app
+
+          # Create final distribution zip with notarized and stapled app
+          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }} ${{ env.BUNDLE_NAME }}.zip
+
+          # Clean up temporary notarization zip
+          rm ${{ env.BUNDLE_NAME }}-notarization.zip
 
       - name: Create Windows bundle
         if: env.OS == 'windows'
