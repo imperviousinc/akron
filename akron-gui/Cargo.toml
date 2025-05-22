@@ -9,9 +9,9 @@ large_enum_variant = "allow"
 [dependencies]
 akrond = { path = "../akrond" }
 
-spaces_client = { git = "https://github.com/spacesprotocol/spaces.git" }
-spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git" }
-spaces_wallet = { git = "https://github.com/spacesprotocol/spaces.git" }
+spaces_client = { workspace = true }
+spaces_protocol = { workspace = true }
+spaces_wallet = { workspace = true }
 
 tokio = { version = "1", default-features = false, features = ["fs"] }
 iced = { version = "0.13.1", default-features = false, features = [

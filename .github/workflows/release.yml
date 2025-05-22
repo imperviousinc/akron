@@ -21,12 +21,15 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Get the tag name
         id: get_tag
+        shell: bash
         run: |
           echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
@@ -43,9 +46,21 @@ jobs:
           cargo build --bin akron-gui --release --target ${{ matrix.target }}
 
       - name: Get OS and architecture
+        shell: bash
         run: |
-          echo "OS=$(echo ${{ matrix.target }} | grep -q 'linux' && echo 'linux' || echo 'darwin')" >> $GITHUB_ENV
-          echo "ARCH=$(echo ${{ matrix.target }} | grep -q 'aarch64' && echo 'arm64' || echo 'x86_64')" >> $GITHUB_ENV
+          if [[ "${{ matrix.target }}" == *"linux"* ]]; then
+            echo "OS=linux" >> $GITHUB_ENV
+          elif [[ "${{ matrix.target }}" == *"darwin"* ]]; then
+            echo "OS=darwin" >> $GITHUB_ENV
+          elif [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            echo "OS=windows" >> $GITHUB_ENV
+          fi
+
+          if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+            echo "ARCH=arm64" >> $GITHUB_ENV
+          else
+            echo "ARCH=x86_64" >> $GITHUB_ENV
+          fi
 
       - name: Create Linux app bundle
         if: env.OS == 'linux'
@@ -115,6 +130,25 @@ jobs:
           codesign --verify --verbose akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
           ditto -c -k --keepParent akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }} akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.zip 
 
+      - name: Create Windows bundle
+        if: env.OS == 'windows'
+        shell: powershell
+        run: |
+          choco install imagemagick.app -y
+          choco install reshack -y
+          magick convert assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+
+          $outputDir = "akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}"
+          $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
+          $targetExe = "$outputDir\akron.exe"
+
+          $reshackCmd = """C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe"" -open ""$sourceExe"" -save ""$targetExe"" -action addoverwrite -res ""akron.ico"" -mask ICONGROUP,MAINICON,"
+          Write-Host "$reshackCmd"
+          cmd /c $reshackCmd
+
+          $zipFile = "akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.zip"
+          7z a -tzip $zipFile $outputDir
+
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -126,7 +160,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            ${{ env.OS == 'linux' && format('akron-{0}-{1}-{2}.tar.gz', env.TAG, env.OS, env.ARCH) || format('akron-{0}-{1}-{2}.zip', env.TAG, env.OS, env.ARCH) }}
+            akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.${{ env.OS == 'linux' && 'tar.gz' || 'zip' }}
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
