@@ -4,13 +4,28 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "process", "time", "signal", "net", "io-std", "io-util", "sync", "fs"] }
+tokio = { version = "1.37.0", features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "process",
+    "time",
+    "signal",
+    "net",
+    "io-std",
+    "io-util",
+    "sync",
+    "fs",
+] }
 anyhow = "1.0.86"
 log = "0.4.21"
-spaces_client = { git = "https://github.com/spacesprotocol/spaces.git" }
+spaces_client = { workspace = true }
 yuki = { git = "https://github.com/buffrr/yuki.git", features = ["default"] }
 env_logger = "0.11.3"
-reqwest = { version = "0.12.5", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12.5", default-features = false, features = [
+    "rustls-tls",
+    "stream",
+] }
 futures-util = "0.3.31"
 hex = "0.4.3"
 directories = "6.0.0"

@@ -21,17 +21,42 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Get the tag name
         id: get_tag
+        shell: bash
         run: |
           echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "TAG=dev-$(date +'%Y%m%d%H%M')" >> $GITHUB_ENV
           fi
+
+      - name: Get OS and architecture
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == *"linux"* ]]; then
+            echo "OS=linux" >> $GITHUB_ENV
+          elif [[ "${{ matrix.target }}" == *"darwin"* ]]; then
+            echo "OS=darwin" >> $GITHUB_ENV
+          elif [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            echo "OS=windows" >> $GITHUB_ENV
+          fi
+          if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+            echo "ARCH=arm64" >> $GITHUB_ENV
+          else
+            echo "ARCH=x86_64" >> $GITHUB_ENV
+          fi
+
+      - name: Set bundle name
+        shell: bash
+        run: |
+          echo "BUNDLE_NAME=akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}" >> $GITHUB_ENV
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -42,17 +67,12 @@ jobs:
         run: |
           cargo build --bin akron-gui --release --target ${{ matrix.target }}
 
-      - name: Get OS and architecture
-        run: |
-          echo "OS=$(echo ${{ matrix.target }} | grep -q 'linux' && echo 'linux' || echo 'darwin')" >> $GITHUB_ENV
-          echo "ARCH=$(echo ${{ matrix.target }} | grep -q 'aarch64' && echo 'arm64' || echo 'x86_64')" >> $GITHUB_ENV
-
       - name: Create Linux app bundle
         if: env.OS == 'linux'
         run: |
-          mkdir akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
-          cp target/${{ matrix.target }}/release/akron-gui akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
-          tar -czf akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.tar.gz akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}
+          mkdir ${{ env.BUNDLE_NAME }}
+          cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}
+          tar -czf ${{ env.BUNDLE_NAME }}.tar.gz ${{ env.BUNDLE_NAME }}
 
       - name: Create macOS app bundle
         if: env.OS == 'darwin'
@@ -72,8 +92,8 @@ jobs:
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-          mkdir -p akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/{MacOS,Resources}
-          cp target/${{ matrix.target }}/release/akron-gui akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/MacOS/
+          mkdir -p ${{ env.BUNDLE_NAME }}/Akron.app/Contents/{MacOS,Resources}
+          cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}/Akron.app/Contents/MacOS/
 
           mkdir -p iconbuild.iconset
           sips -z 16 16 assets/akron.png --out iconbuild.iconset/icon_16x16.png
@@ -81,39 +101,67 @@ jobs:
           sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_32x32.png
           sips -z 64 64 assets/akron.png --out iconbuild.iconset/icon_32x32@2x.png
           iconutil -c icns iconbuild.iconset -o icon.icns
-          cp icon.icns akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/Resources/
+          cp icon.icns ${{ env.BUNDLE_NAME }}/Akron.app/Contents/Resources/
           
-          cat > akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key>
-            <string>akron-gui</string>
-            <key>CFBundleIconFile</key>
-            <string>icon</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.impervious.akron</string>
-            <key>CFBundleInfoDictionaryVersion</key>
-            <string>6.0</string>
-            <key>CFBundleName</key>
-            <string>Akron</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>${{ env.TAG }}</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>10.13</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
+          envsubst < .github/Info.plist.template > ${{ env.BUNDLE_NAME }}/Akron.app/Contents/Info.plist
 
-          chmod +x akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app/Contents/MacOS/akron-gui
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --deep --timestamp akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
-          codesign --verify --verbose akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}/Akron.app
-          ditto -c -k --keepParent akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }} akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}.zip 
+          chmod +x ${{ env.BUNDLE_NAME }}/Akron.app/Contents/MacOS/akron-gui
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --deep --timestamp ${{ env.BUNDLE_NAME }}/Akron.app
+          codesign --verify --verbose ${{ env.BUNDLE_NAME }}/Akron.app
+          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }} ${{ env.BUNDLE_NAME }}.zip 
+
+      - name: Create Windows bundle
+        if: env.OS == 'windows'
+        shell: powershell
+        run: |
+          choco install imagemagick.app -y
+          choco install reshack -y
+          magick assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+
+          $bundleName = "${{ env.BUNDLE_NAME }}"
+          $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
+          $targetExe = "$bundleName\akron.exe"
+
+          New-Item -ItemType Directory -Force -Path $bundleName
+          $reshackCmd = """C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe"" -open ""$sourceExe"" -save ""$targetExe"" -action addoverwrite -res ""akron.ico"" -mask ICONGROUP,MAINICON,"
+          Write-Host "$reshackCmd"
+          cmd /c $reshackCmd
+
+          $zipFile = "$bundleName.zip"
+          7z a -tzip $zipFile $bundleName
+
+          $env:BUNDLE_NAME = $bundleName
+          $env:VERSION = if ($env:TAG -match "^v?(\d+)\.(\d+)\.(\d+)") {
+            "$($matches[1]).$($matches[2]).$($matches[3]).0"
+          } else {
+            "0.0.0.1"
+          }
+          (Get-Content ".github\akron.wxs.template") -replace '\$VERSION', $env:VERSION -replace '\$BUNDLE_NAME', $env:BUNDLE_NAME | Out-File -FilePath "akron.wxs" -Encoding UTF8
+          
+          & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" akron.wxs
+          & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -ext WixUIExtension akron.wixobj -o "$bundleName.msi"
+          Remove-Item -Path "$bundleName.wixpdb" -ErrorAction SilentlyContinue
+
+      - name: Find release artifacts
+        id: find_artifacts
+        shell: bash
+        run: |
+          artifacts=$(find . -maxdepth 1 -name "${{ env.BUNDLE_NAME }}.*" -type f | sort)
+          echo "Found artifacts:"
+          echo "$artifacts"
+          
+          artifact_list=""
+          for artifact in $artifacts; do
+            if [ -n "$artifact_list" ]; then
+              artifact_list="$artifact_list\n$artifact"
+            else
+              artifact_list="$artifact"
+            fi
+          done
+          
+          echo "artifacts<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$artifact_list" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         id: create_release
@@ -125,8 +173,7 @@ jobs:
             Akron release of version ${{ env.TAG }}.
           draft: false
           prerelease: false
-          files: |
-            ${{ env.OS == 'linux' && format('akron-{0}-{1}-{2}.tar.gz', env.TAG, env.OS, env.ARCH) || format('akron-{0}-{1}-{2}.zip', env.TAG, env.OS, env.ARCH) }}
+          files: ${{ steps.find_artifacts.outputs.artifacts }}
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
