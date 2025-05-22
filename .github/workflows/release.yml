@@ -23,6 +23,7 @@ jobs:
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -115,8 +116,7 @@ jobs:
         run: |
           choco install imagemagick.app -y
           choco install reshack -y
-          choco install wixtoolset -y
-          magick convert assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+          magick assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
 
           $bundleName = "${{ env.BUNDLE_NAME }}"
           $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
@@ -130,13 +130,17 @@ jobs:
           $zipFile = "$bundleName.zip"
           7z a -tzip $zipFile $bundleName
 
-          $env:TAG = "${{ env.TAG }}"
           $env:BUNDLE_NAME = $bundleName
-          (Get-Content ".github\akron.wxs.template") -replace '\$TAG', $env:TAG -replace '\$BUNDLE_NAME', $env:BUNDLE_NAME | Out-File -FilePath "akron.wxs" -Encoding UTF8
+          $env:VERSION = if ($env:TAG -match "^v?(\d+)\.(\d+)\.(\d+)") {
+            "$($matches[1]).$($matches[2]).$($matches[3]).0"
+          } else {
+            "0.0.0.1"
+          }
+          (Get-Content ".github\akron.wxs.template") -replace '\$VERSION', $env:VERSION -replace '\$BUNDLE_NAME', $env:BUNDLE_NAME | Out-File -FilePath "akron.wxs" -Encoding UTF8
           
-          & "C:\Program Files (x86)\WiX Toolset v3.11\bin\candle.exe" akron.wxs
-          & "C:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe" -ext WixUIExtension akron.wixobj -o "$bundleName.msi"
-
+          & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" akron.wxs
+          & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -ext WixUIExtension akron.wixobj -o "$bundleName.msi"
+          Remove-Item -Path "$bundleName.wixpdb" -ErrorAction SilentlyContinue
 
       - name: Find release artifacts
         id: find_artifacts
