@@ -74,6 +74,11 @@ jobs:
           cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}
           tar -czf ${{ env.BUNDLE_NAME }}.tar.gz ${{ env.BUNDLE_NAME }}
 
+      - name: Install create-dmg
+        if: env.OS == 'darwin'
+        run: |
+          brew install create-dmg
+
       - name: Create macOS app bundle
         if: env.OS == 'darwin'
         env:
@@ -109,29 +114,37 @@ jobs:
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --deep --timestamp ${{ env.BUNDLE_NAME }}/Akron.app
           codesign --verify --verbose ${{ env.BUNDLE_NAME }}/Akron.app
           
+          # Create dmg
+          echo "Creating DMG installer ..."
+          create-dmg \
+            --volname "Akron" \
+            --window-pos 200 120 \
+            --window-size 600 330 \
+            --icon-size 100 \
+            --icon "Akron.app" 170 125 \
+            --app-drop-link 410 120 \
+            --hide-extension "Akron.app" \
+            --codesign "$APPLE_SIGNING_IDENTITY" \
+            --hdiutil-quiet \
+            "${{ env.BUNDLE_NAME }}.dmg" \
+            "${{ env.BUNDLE_NAME }}/Akron.app"
+
+
           # Submit for notarization
-          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }}/Akron.app ${{ env.BUNDLE_NAME }}-notarization.zip
           echo "Submitting app for notarization..."
-          xcrun notarytool submit ${{ env.BUNDLE_NAME }}-notarization.zip \
+          xcrun notarytool submit ${{ env.BUNDLE_NAME }}.dmg \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --password "${{ secrets.APP_SPECIFIC_PASSWORD }}" \
             --team-id "${{ secrets.APPLE_TEAM_ID }}" \
             --wait
           
-          # Staple the notarization ticket to the app
-          echo "Stapling notarization ticket..."
-          xcrun stapler staple ${{ env.BUNDLE_NAME }}/Akron.app
+          # Staple the notarization ticket to the DMG
+          echo "Stapling notarization ticket to DMG..."
+          xcrun stapler staple ${{ env.BUNDLE_NAME }}.dmg
 
-          # Verify the stapling
-          echo "Verifying stapled app..."
-          xcrun stapler validate ${{ env.BUNDLE_NAME }}/Akron.app
-          spctl -a -vvv -t install ${{ env.BUNDLE_NAME }}/Akron.app
-
-          # Create final distribution zip with notarized and stapled app
-          ditto -c -k --keepParent ${{ env.BUNDLE_NAME }} ${{ env.BUNDLE_NAME }}.zip
-
-          # Clean up temporary notarization zip
-          rm ${{ env.BUNDLE_NAME }}-notarization.zip
+          # Verify the stapled DMG
+          echo "Verifying stapled DMG..."
+          xcrun stapler validate ${{ env.BUNDLE_NAME }}.dmg
 
       - name: Create Windows bundle
         if: env.OS == 'windows'
