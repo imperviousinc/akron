@@ -7,7 +7,6 @@ mod sign;
 mod spaces;
 mod state;
 
-use std::collections::VecDeque;
 use iced::{
     clipboard, time,
     widget::{
@@ -16,6 +15,7 @@ use iced::{
     },
     Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme,
 };
+use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
 use crate::{
     client::*,
@@ -55,7 +55,7 @@ pub struct State {
     market_screen: market::State,
     sign_screen: sign::State,
     settings_screen: settings::State,
-    log_buffer: VecDeque<String>,
+    log_buffer: ConstGenericRingBuffer<String, 50>,
     logs_expanded: bool,
     fee_rate_selector: FeeRateSelector,
     fee_rate: Option<FeeRate>,
@@ -125,7 +125,7 @@ impl State {
             market_screen: Default::default(),
             sign_screen: Default::default(),
             settings_screen: Default::default(),
-            log_buffer: VecDeque::new(),
+            log_buffer: Default::default(),
             logs_expanded: false,
             fee_rate_selector: Default::default(),
             fee_rate: None,
@@ -281,10 +281,7 @@ impl State {
                 Action::Task(Task::batch(tasks))
             }
             Message::LogReceived(log) => {
-                if self.log_buffer.len() >= 50 {
-                    self.log_buffer.pop_front();
-                }
-                self.log_buffer.push_back(log);
+                self.log_buffer.push(log);
                 Action::Task(Task::none())
             }
             Message::NavigateTo(route) => Action::Task(self.navigate_to(route)),

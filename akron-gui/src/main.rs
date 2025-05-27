@@ -20,8 +20,8 @@ pub enum ConfigBackend {
     },
     Bitcoind {
         network: ExtendedNetwork,
-        url: String,
         cookie: String,
+        url: String,
         user: String,
         password: String,
     },
