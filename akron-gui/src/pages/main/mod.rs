@@ -41,9 +41,6 @@ enum Screen {
     Settings,
 }
 
-const EXPANDED_LOGS_HEIGHT: u16 = 280;
-const MAX_LOGS_BUFFER: usize = 50;
-
 #[derive(Debug)]
 pub struct State {
     config: Config,
@@ -61,7 +58,7 @@ pub struct State {
     settings_screen: settings::State,
     logs_rx: Option<tokio::sync::broadcast::Receiver<String>>,
     log_buffer: VecDeque<String>,
-    logs_height: u16,
+    logs_expanded: bool,
     fee_rate_selector: FeeRateSelector,
     fee_rate: Option<FeeRate>,
     fee_rate_confirmed_message: Option<Message>,
@@ -134,7 +131,7 @@ impl State {
             settings_screen: Default::default(),
             logs_rx,
             log_buffer: VecDeque::new(),
-            logs_height: 0,
+            logs_expanded: false,
             fee_rate_selector: Default::default(),
             fee_rate: None,
             fee_rate_confirmed_message: None,
@@ -274,7 +271,7 @@ impl State {
             Message::DrainLogs => {
                 if let Some(rx) = self.logs_rx.as_mut() {
                     while let Ok(log_msg) = rx.try_recv() {
-                        if self.log_buffer.len() >= MAX_LOGS_BUFFER {
+                        if self.log_buffer.len() >= 50 {
                             self.log_buffer.pop_front();
                         }
                         self.log_buffer.push_back(log_msg);
@@ -694,11 +691,7 @@ impl State {
                 settings::Action::None => Action::Task(Task::none()),
             },
             Message::ToggleLogs => {
-                if self.logs_height == 0 {
-                    self.logs_height = EXPANDED_LOGS_HEIGHT;
-                } else {
-                    self.logs_height = 0;
-                }
+                self.logs_expanded = !self.logs_expanded;
                 Action::Task(Task::none())
             }
             // Fee rate modal
@@ -910,8 +903,7 @@ impl State {
             return None;
         }
 
-        let logs_expanded = self.logs_height != 0;
-        let toggle_icon = if logs_expanded {
+        let toggle_icon = if self.logs_expanded {
             text_icon(Icon::ChevronDown)
         } else {
             text_icon(Icon::ChevronRight)
@@ -935,7 +927,7 @@ impl State {
             })
             .on_press(Message::ToggleLogs);
 
-        let (log_header, logs) = if logs_expanded {
+        let (log_header, logs) = if self.logs_expanded {
             (
                 text_small("Status: "),
                 Some(
@@ -961,7 +953,7 @@ impl State {
                         bottom: 10.0,
                         left: 10.0,
                     })
-                    .height(self.logs_height)
+                    .height(280)
                     .width(Fill),
                 ),
             )
@@ -981,7 +973,7 @@ impl State {
             let palette = theme.extended_palette();
             container::Style {
                 text_color: None,
-                background: if !logs_expanded {
+                background: if !self.logs_expanded {
                     Some(palette.background.weak.color.into())
                 } else {
                     None
