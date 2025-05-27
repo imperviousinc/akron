@@ -1,18 +1,19 @@
-use iced::widget::text;
 use iced::{
-    widget::{button, center, column, container, row},
-    Bottom, Center, Element, Fill, Task, Theme,
+    widget::{button, center, column, container, horizontal_rule, row, scrollable, text},
+    Bottom, Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme,
 };
-use spaces_client::config::ExtendedNetwork;
+use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
-use crate::widget::base::base_container;
-use crate::widget::text::text_semibold;
+use spaces_client::config::ExtendedNetwork;
+use spaces_protocol::constants::ChainAnchor;
+
 use crate::{
-    client::{Client, ClientResult},
+    client::{Client, ClientResult, ServerInfo},
     widget::{
+        base::base_container,
         form::{submit_button, Form},
         icon::{button_icon, text_icon, Icon},
-        text::{error_block, text_big, text_bold},
+        text::{error_block, text_big, text_bold, text_semibold, text_small},
     },
     Config, ConfigBackend,
 };
@@ -22,6 +23,7 @@ pub struct State {
     config: Config,
     client: Option<Client>,
     connecting: bool,
+    logs: ConstGenericRingBuffer<String, 100>,
     error: Option<String>,
 }
 
@@ -35,6 +37,7 @@ pub enum Message {
     PasswordInput(String),
     Connect,
     ConnectResult(Result<(Client, ConfigBackend), String>),
+    GetServerInfoResult(ClientResult<ServerInfo>),
     ListWalletsResult(ClientResult<Vec<String>>),
     Reset,
     Disconnect,
@@ -42,6 +45,7 @@ pub enum Message {
     ImportWallet,
     ImportWalletPicked(Result<String, String>),
     SetWalletResult(Result<String, String>),
+    LogReceived(String),
 }
 
 pub enum Action {
@@ -67,6 +71,7 @@ impl State {
                 config,
                 client: None,
                 connecting: false,
+                logs: Default::default(),
                 error: None,
             },
             task,
@@ -135,32 +140,85 @@ impl State {
                     Message::ConnectResult,
                 ))
             }
-            Message::ConnectResult(result) => {
-                self.connecting = false;
+            Message::ConnectResult(result) => match result {
+                Ok((client, backend_config)) => {
+                    self.client = Some(client);
+                    self.config.backend = Some(backend_config);
+                    Action::Task(
+                        self.client
+                            .as_ref()
+                            .unwrap()
+                            .get_server_info()
+                            .map(Message::GetServerInfoResult),
+                    )
+                }
+                Err(err) => {
+                    self.connecting = false;
+                    self.error = Some(err);
+                    Action::none()
+                }
+            },
+            Message::GetServerInfoResult(result) => {
                 match result {
-                    Ok((client, backend_config)) => {
-                        self.client = Some(client);
-                        self.config.backend = Some(backend_config);
-                        if self.config.wallet.is_none() {
-                            Action::Task(
-                                self.client
-                                    .as_ref()
-                                    .unwrap()
-                                    .list_wallets()
-                                    .map(Message::ListWalletsResult),
-                            )
-                        } else {
-                            self.finish()
+                    Ok(server_info) => {
+                        let backend_config = self.config.backend.as_ref().unwrap();
+                        match backend_config {
+                            ConfigBackend::Akrond { .. } => {}
+                            ConfigBackend::Bitcoind { network, .. }
+                            | ConfigBackend::Spaced { network, .. } => {
+                                if server_info.network != network.to_string() {
+                                    self.client = None;
+                                    self.connecting = false;
+                                    self.error = Some("Wrong network".to_string());
+                                    return Action::none();
+                                }
+                            }
+                        }
+                        if server_info.chain.headers
+                            >= (match backend_config {
+                                ConfigBackend::Akrond { prune_point, .. } => {
+                                    prune_point.map_or(0, |p| p.height)
+                                }
+                                ConfigBackend::Bitcoind { network, .. }
+                                | ConfigBackend::Spaced { network, .. } => match network {
+                                    ExtendedNetwork::Mainnet => ChainAnchor::MAINNET().height,
+                                    ExtendedNetwork::Testnet4 => ChainAnchor::TESTNET4().height,
+                                    _ => 0,
+                                },
+                            })
+                        {
+                            return if self.config.wallet.is_none() {
+                                Action::Task(
+                                    self.client
+                                        .as_ref()
+                                        .unwrap()
+                                        .list_wallets()
+                                        .map(Message::ListWalletsResult),
+                                )
+                            } else {
+                                self.finish()
+                            };
                         }
                     }
                     Err(err) => {
-                        self.error = Some(err);
-                        Action::none()
+                        self.logs.push(err);
                     }
                 }
+                Action::Task(
+                    Task::future(tokio::time::sleep(std::time::Duration::from_secs(1)))
+                        .discard()
+                        .chain(
+                            self.client
+                                .as_ref()
+                                .unwrap()
+                                .get_server_info()
+                                .map(Message::GetServerInfoResult),
+                        ),
+                )
             }
             Message::ListWalletsResult(result) => match result {
                 Ok(wallets) => {
+                    self.connecting = false;
                     if wallets.is_empty() {
                         Action::none()
                     } else {
@@ -236,6 +294,10 @@ impl State {
                     Action::none()
                 }
             },
+            Message::LogReceived(log) => {
+                self.logs.push(log);
+                Action::Task(Task::none())
+            }
         }
     }
 
@@ -305,82 +367,102 @@ impl State {
                 ].align_y(Bottom).padding([0, 80]).spacing(80)
             ]
             .spacing(10)
+        } else if self.connecting {
+            column![
+                center(text_semibold("Please wait... This may take a few minutes.").size(16)).padding([10, 0]).height(Shrink),
+                horizontal_rule(3.0),
+                container(
+                    scrollable(column(
+                        self.logs
+                            .iter()
+                            .map(|line| {
+                                text_small(line.clone())
+                                    .color(Color::BLACK)
+                                    .font(Font::MONOSPACE)
+                                    .into()
+                            })
+                            .collect::<Vec<_>>(),
+                    ))
+                    .width(Fill)
+                    .height(Fill)
+                    .anchor_bottom(),
+                )
+                .padding(10)
+                .height(Fill)
+                .width(Fill),
+            ]
         } else if self.client.is_none() {
-            if !self.connecting {
-                column![
-                    row![
-                        button_icon(Icon::ChevronLeft)
-                            .style(button::text)
-                            .on_press(Message::Reset),
-                        text_big("Configure backend"),
-                    ]
-                    .align_y(Center),
-                    error_block(self.error.as_ref()),
-                    {
-                        let networks = [
-                            ExtendedNetwork::Mainnet,
-                            ExtendedNetwork::Testnet4,
-                            ExtendedNetwork::Regtest,
-                        ];
-                        match self.config.backend.as_ref().unwrap() {
-                            ConfigBackend::Akrond { network, .. } => {
-                                base_container(
-                                Form::new("Connect", Some(Message::Connect)).add_pick_list(
-                                    "Chain",
-                                    [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
-                                    Some(network),
-                                    Message::NetworkSelect,
-                                ))
-                            }
-                            ConfigBackend::Bitcoind {
-                                network,
+            column![
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::Reset),
+                    text_big("Configure backend"),
+                ]
+                .align_y(Center),
+                error_block(self.error.as_ref()),
+                {
+                    let networks = [
+                        ExtendedNetwork::Mainnet,
+                        ExtendedNetwork::Testnet4,
+                        ExtendedNetwork::Regtest,
+                    ];
+                    match self.config.backend.as_ref().unwrap() {
+                        ConfigBackend::Akrond { network, .. } => {
+                            base_container(
+                            Form::new("Connect", Some(Message::Connect)).add_pick_list(
+                                "Chain",
+                                [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
+                                Some(network),
+                                Message::NetworkSelect,
+                            ))
+                        }
+                        ConfigBackend::Bitcoind {
+                            network,
+                            url,
+                            cookie,
+                            user,
+                            password,
+                        } => base_container(Form::new("Connect", Some(Message::Connect))
+                            .add_text_input(
+                                "Bitcoind JSON-RPC URL",
+                                "http://127.0.0.1:7225",
                                 url,
-                                cookie,
-                                user,
+                                Message::UrlInput,
+                            )
+                            .add_text_input("Auth cookie", "none", cookie, Message::CookieInput)
+                            .add_text_input("User login", "none", user, Message::UserInput)
+                            .add_text_input(
+                                "User password",
+                                "none",
                                 password,
-                            } => base_container(Form::new("Connect", Some(Message::Connect))
+                                Message::PasswordInput,
+                            )
+                            .add_pick_list(
+                                "Chain",
+                                networks,
+                                Some(network),
+                                Message::NetworkSelect,
+                            )),
+                        ConfigBackend::Spaced { network, url } => {
+                            base_container(Form::new("Connect", Some(Message::Connect))
                                 .add_text_input(
-                                    "Bitcoind JSON-RPC URL",
-                                    "http://127.0.0.1:7225",
+                                    "Spaced JSON-RPC URL",
+                                    "http://127.0.0.1:8332",
                                     url,
                                     Message::UrlInput,
-                                )
-                                .add_text_input("Auth cookie", "none", cookie, Message::CookieInput)
-                                .add_text_input("User login", "none", user, Message::UserInput)
-                                .add_text_input(
-                                    "User password",
-                                    "none",
-                                    password,
-                                    Message::PasswordInput,
                                 )
                                 .add_pick_list(
                                     "Chain",
                                     networks,
                                     Some(network),
                                     Message::NetworkSelect,
-                                )),
-                            ConfigBackend::Spaced { network, url } => {
-                                base_container(Form::new("Connect", Some(Message::Connect))
-                                    .add_text_input(
-                                        "Spaced JSON-RPC URL",
-                                        "http://127.0.0.1:8332",
-                                        url,
-                                        Message::UrlInput,
-                                    )
-                                    .add_pick_list(
-                                        "Chain",
-                                        networks,
-                                        Some(network),
-                                        Message::NetworkSelect,
-                                    ))
-                            }
+                                ))
                         }
-                    },
-                ]
-                .spacing(10)
-            } else {
-                column![center(text_semibold("Please wait... This may take a few minutes.").size(16)),]
-            }
+                    }
+                },
+            ]
+            .spacing(10)
         } else {
             column![
                 row![
@@ -413,5 +495,13 @@ impl State {
         })
         .padding([60, 100])
         .into()
+    }
+
+    pub fn subscription(&self) -> Subscription<Message> {
+        if let Some(client) = self.client.as_ref() {
+            client.logs_subscription().map(Message::LogReceived)
+        } else {
+            Subscription::none()
+        }
     }
 }
