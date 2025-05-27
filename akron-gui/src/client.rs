@@ -1,6 +1,7 @@
 use std::time::Duration;
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
-use iced::Task;
+use iced::{Subscription, Task};
 use jsonrpsee::{
     core::ClientError,
     http_client::{HttpClient, HttpClientBuilder},
@@ -38,9 +39,10 @@ use crate::ConfigBackend;
 
 #[derive(Debug, Clone)]
 pub struct Client {
+    id: usize,
     client: HttpClient,
     shutdown: Option<tokio::sync::broadcast::Sender<()>>,
-    pub logs: Option<tokio::sync::broadcast::Sender<String>>,
+    logs: Option<tokio::sync::broadcast::Sender<String>>,
 }
 
 pub type ClientResult<T> = Result<T, String>;
@@ -267,6 +269,7 @@ impl Client {
         }
         Ok((
             Self {
+                id: rand::random(),
                 client,
                 shutdown,
                 logs,
@@ -678,6 +681,17 @@ impl Client {
             },
             map_wallet_result,
         )
+    }
+
+    pub fn logs_subscription(&self) -> Subscription<String> {
+        if let Some(sender) = &self.logs {
+            let stream = BroadcastStream::new(sender.subscribe())
+                .filter_map(|result| result.ok() );
+
+            Subscription::run_with_id(format!("client_logs_{}", self.id), stream)
+        } else {
+            Subscription::none()
+        }
     }
 }
 

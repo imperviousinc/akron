@@ -14,6 +14,7 @@ spaces_protocol = { workspace = true }
 spaces_wallet = { workspace = true }
 
 tokio = { version = "1", default-features = false, features = ["fs"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 iced = { version = "0.13.1", default-features = false, features = [
     "wgpu",
     "tiny-skia",
@@ -22,6 +23,7 @@ iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
 ] }
 jsonrpsee = { version = "0.22.5", features = ["http-client"] }
+rand = "0.8"
 hex = "0.4.3"
 rustc-hash = "1.1"
 rfd = { version = "0.14", default-features = false, features = [

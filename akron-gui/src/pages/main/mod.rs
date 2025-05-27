@@ -7,6 +7,7 @@ mod sign;
 mod spaces;
 mod state;
 
+use std::collections::VecDeque;
 use iced::{
     clipboard, time,
     widget::{
@@ -15,8 +16,6 @@ use iced::{
     },
     Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme,
 };
-use std::collections::VecDeque;
-use std::time::Duration;
 
 use crate::{
     client::*,
@@ -56,7 +55,6 @@ pub struct State {
     market_screen: market::State,
     sign_screen: sign::State,
     settings_screen: settings::State,
-    logs_rx: Option<tokio::sync::broadcast::Receiver<String>>,
     log_buffer: VecDeque<String>,
     logs_expanded: bool,
     fee_rate_selector: FeeRateSelector,
@@ -81,7 +79,7 @@ pub enum Route {
 pub enum Message {
     Tick,
     ToggleLogs,
-    DrainLogs,
+    LogReceived(String),
     NavigateTo(Route),
     ServerInfo(ClientResult<ServerInfo>),
     ListWallets(ClientResult<Vec<String>>),
@@ -113,8 +111,6 @@ pub enum Action {
 
 impl State {
     pub fn run(config: Config, client: Client) -> (Self, Task<Message>) {
-        let logs_rx = client.logs.as_ref().map(|l| l.subscribe());
-
         let state = Self {
             config,
             client,
@@ -129,7 +125,6 @@ impl State {
             market_screen: Default::default(),
             sign_screen: Default::default(),
             settings_screen: Default::default(),
-            logs_rx,
             log_buffer: VecDeque::new(),
             logs_expanded: false,
             fee_rate_selector: Default::default(),
@@ -268,17 +263,6 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         match message {
-            Message::DrainLogs => {
-                if let Some(rx) = self.logs_rx.as_mut() {
-                    while let Ok(log_msg) = rx.try_recv() {
-                        if self.log_buffer.len() >= 50 {
-                            self.log_buffer.pop_front();
-                        }
-                        self.log_buffer.push_back(log_msg);
-                    }
-                }
-                Action::Task(Task::none())
-            }
             Message::Tick => {
                 let mut tasks = vec![self.get_server_info(), self.get_wallet_info()];
                 match self.screen {
@@ -295,6 +279,13 @@ impl State {
                     _ => {}
                 }
                 Action::Task(Task::batch(tasks))
+            }
+            Message::LogReceived(log) => {
+                if self.log_buffer.len() >= 50 {
+                    self.log_buffer.pop_front();
+                }
+                self.log_buffer.push_back(log);
+                Action::Task(Task::none())
             }
             Message::NavigateTo(route) => Action::Task(self.navigate_to(route)),
             Message::ServerInfo(result) => {
@@ -1018,7 +1009,7 @@ impl State {
         )
         .map(|_| Message::Tick);
 
-        let logs = time::every(Duration::from_millis(200)).map(|_| Message::DrainLogs);
+        let logs = self.client.logs_subscription().map(Message::LogReceived);
 
         let fee_rate = self
             .fee_rate_selector
