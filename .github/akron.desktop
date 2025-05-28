@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Akron
+Comment=Bitcoin wallet with Spaces protocol support
+Exec=akron
+Icon=akron
+Terminal=false
+Type=Application
+Categories=Office;Finance;
+StartupWMClass=akron
+Keywords=bitcoin;wallet;cryptocurrency;
