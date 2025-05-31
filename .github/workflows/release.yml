@@ -95,7 +95,7 @@ jobs:
 
           cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}/bin/akron
           cp .github/akron.desktop ${{ env.BUNDLE_NAME }}/share/applications/
-          cp assets/akron.png ${{ env.BUNDLE_NAME }}/share/icons/hicolor/64x64/apps/
+          cp -r assets/hicolor/* ${{ env.BUNDLE_NAME }}/share/icons/hicolor/
 
           tar -czf ${{ env.BUNDLE_NAME }}.tar.gz ${{ env.BUNDLE_NAME }}
 
@@ -143,10 +143,15 @@ jobs:
           cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}/Akron.app/Contents/MacOS/
 
           mkdir -p iconbuild.iconset
-          sips -z 16 16 assets/akron.png --out iconbuild.iconset/icon_16x16.png
-          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_16x16@2x.png
-          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_32x32.png
-          sips -z 64 64 assets/akron.png --out iconbuild.iconset/icon_32x32@2x.png
+          cp assets/hicolor/16x16/apps/akron.png iconbuild.iconset/icon_16x16.png
+          cp assets/hicolor/32x32/apps/akron.png iconbuild.iconset/icon_16x16@2x.png
+          cp assets/hicolor/32x32/apps/akron.png iconbuild.iconset/icon_32x32.png
+          cp assets/hicolor/64x64/apps/akron.png iconbuild.iconset/icon_32x32@2x.png
+          cp assets/hicolor/128x128/apps/akron.png iconbuild.iconset/icon_128x128.png
+          cp assets/hicolor/256x256/apps/akron.png iconbuild.iconset/icon_128x128@2x.png
+          cp assets/hicolor/256x256/apps/akron.png iconbuild.iconset/icon_256x256.png
+          cp assets/hicolor/512x512/apps/akron.png iconbuild.iconset/icon_256x256@2x.png
+          cp assets/hicolor/512x512/apps/akron.png iconbuild.iconset/icon_512x512.png
           iconutil -c icns iconbuild.iconset -o icon.icns
           cp icon.icns ${{ env.BUNDLE_NAME }}/Akron.app/Contents/Resources/
           
@@ -194,7 +199,7 @@ jobs:
         run: |
           choco install imagemagick.app -y
           choco install reshack -y
-          magick assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+          magick assets/hicolor/64x64/apps/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
 
           $bundleName = "${{ env.BUNDLE_NAME }}"
           $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
