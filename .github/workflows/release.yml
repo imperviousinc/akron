@@ -199,7 +199,7 @@ jobs:
         run: |
           choco install imagemagick.app -y
           choco install reshack -y
-          magick assets/hicolor/64x64/apps/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+          magick @(16,24,32,48,64,96,128,256,512 | ForEach-Object {"assets/hicolor/${_}x${_}/apps/akron.png"}) akron.ico
 
           $bundleName = "${{ env.BUNDLE_NAME }}"
           $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
