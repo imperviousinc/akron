@@ -1,6 +1,6 @@
 use iced::{
-    widget::{button, center, column, container, horizontal_rule, row, scrollable, text},
-    Bottom, Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme,
+    widget::{button, column, container, row, scrollable, text, text_editor},
+    Bottom, Center, Color, Element, Fill, Font, Subscription, Task, Theme,
 };
 use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
@@ -24,6 +24,7 @@ pub struct State {
     client: Option<Client>,
     connecting: bool,
     logs: ConstGenericRingBuffer<String, 100>,
+    mnemonic: Option<text_editor::Content>,
     error: Option<String>,
 }
 
@@ -40,6 +41,8 @@ pub enum Message {
     ListWalletsResult(ClientResult<Vec<String>>),
     Reset,
     Disconnect,
+    MnemonicToggle,
+    MnemonicAction(text_editor::Action),
     CreateWallet,
     ImportWallet,
     ImportWalletPicked(Result<String, String>),
@@ -71,6 +74,7 @@ impl State {
                 client: None,
                 connecting: false,
                 logs: Default::default(),
+                mnemonic: None,
                 error: None,
             },
             task,
@@ -201,13 +205,9 @@ impl State {
                 Action::Task(
                     Task::future(tokio::time::sleep(std::time::Duration::from_secs(1)))
                         .discard()
-                        .chain(
-                            self.client
-                                .as_ref()
-                                .unwrap()
-                                .get_server_info()
-                                .map(Message::GetServerInfoResult),
-                        ),
+                        .chain(self.client.as_ref().map_or(Task::none(), |client| {
+                            client.get_server_info().map(Message::GetServerInfoResult)
+                        })),
                 )
             }
             Message::ListWalletsResult(result) => match result {
@@ -237,17 +237,39 @@ impl State {
                 Action::none()
             }
             Message::Disconnect => {
-                if self.connecting {
-                    return Action::none();
-                }
+                self.connecting = false;
                 self.client = None;
+                Action::none()
+            }
+            Message::MnemonicToggle => {
+                if self.mnemonic.is_some() {
+                    self.mnemonic = None;
+                } else {
+                    use spaces_wallet::bdk_wallet::{
+                        keys::{
+                            bip39::{Language, Mnemonic, WordCount},
+                            GeneratableKey, GeneratedKey,
+                        },
+                        miniscript::Tap,
+                    };
+                    let mnemonic: GeneratedKey<_, Tap> =
+                        Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+                    self.mnemonic = Some(text_editor::Content::with_text(&mnemonic.to_string()));
+                }
+                Action::none()
+            }
+            Message::MnemonicAction(action) => {
+                self.mnemonic.as_mut().unwrap().perform(action);
                 Action::none()
             }
             Message::CreateWallet => Action::Task(
                 self.client
                     .as_ref()
                     .unwrap()
-                    .create_wallet("default".to_string())
+                    .restore_wallet(
+                        "default".to_string(),
+                        self.mnemonic.as_ref().unwrap().text(),
+                    )
                     .map(|r| Message::SetWalletResult(r.result.map(|_| r.label))),
             ),
             Message::ImportWallet => Action::Task(Task::perform(
@@ -364,8 +386,13 @@ impl State {
             .spacing(10)
         } else if self.connecting {
             column![
-                center(text_semibold("Please wait... This may take a few minutes.").size(16)).padding([10, 0]).height(Shrink),
-                horizontal_rule(3.0),
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::Disconnect),
+                    text_big("Connecting"),
+                ]
+                .align_y(Center),
                 container(
                     scrollable(column(
                         self.logs
@@ -464,6 +491,25 @@ impl State {
                 },
             ]
             .spacing(10)
+        } else if let Some(mnemonic) = self.mnemonic.as_ref() {
+            column![
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::MnemonicToggle),
+                    text_big("Create a new wallet from a mnemonic phrase"),
+                ]
+                .align_y(Center),
+                error_block(self.error.as_ref()),
+                base_container(Form::new("Create", Some(Message::CreateWallet))
+                .add_text_editor(
+                    "Mnemonic phrase",
+                    "space separated words",
+                    mnemonic,
+                    Message::MnemonicAction,
+                ))
+            ]
+            .spacing(10)
         } else {
             column![
                 row![
@@ -478,7 +524,7 @@ impl State {
                     column![
                         text_icon(Icon::WalletMinimal).size(150),
                         text_semibold("Create a new spaces wallet").size(20),
-                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::CreateWallet)),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::MnemonicToggle)),
                     ]
                     .align_x(Center)
                     .spacing(30),
