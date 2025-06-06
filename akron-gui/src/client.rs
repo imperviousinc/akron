@@ -175,7 +175,6 @@ impl Client {
             ConfigBackend::Bitcoind {
                 network,
                 url,
-                cookie,
                 user,
                 password,
             } => {
@@ -191,9 +190,6 @@ impl Client {
                     "--bitcoin-rpc-url",
                     url,
                 ];
-                if !cookie.is_empty() {
-                    spaces_args.extend_from_slice(&["--bitcoin-rpc-cookie", cookie]);
-                }
                 if !user.is_empty() {
                     spaces_args.extend_from_slice(&[
                         "--bitcoin-rpc-user",

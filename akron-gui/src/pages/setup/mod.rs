@@ -32,7 +32,6 @@ pub enum Message {
     BackendSet(ConfigBackend),
     NetworkSelect(ExtendedNetwork),
     UrlInput(String),
-    CookieInput(String),
     UserInput(String),
     PasswordInput(String),
     Connect,
@@ -107,16 +106,10 @@ impl State {
                 }
                 Action::none()
             }
-            Message::CookieInput(value) => {
-                match self.config.backend.as_mut() {
-                    Some(ConfigBackend::Bitcoind { cookie, .. }) => *cookie = value,
-                    _ => unreachable!(),
-                }
-                Action::none()
-            }
             Message::UserInput(value) => {
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { user, .. }) => *user = value,
+                    Some(ConfigBackend::Spaced { user, .. }) => *user = value,
                     _ => unreachable!(),
                 }
                 Action::none()
@@ -124,6 +117,7 @@ impl State {
             Message::PasswordInput(value) => {
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { password, .. }) => *password = value,
+                    Some(ConfigBackend::Spaced { password, .. }) => *password = value,
                     _ => unreachable!(),
                 }
                 Action::none()
@@ -333,7 +327,6 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Bitcoind {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:8332".to_string(),
-                                cookie: String::new(),
                                 user: String::new(),
                                 password: String::new(),
                             }))
@@ -355,6 +348,8 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Spaced {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:7225".to_string(),
+                                user: String::new(),
+                                password: String::new(),
                             }))
                         ).style(|theme: &Theme, status: button::Status| {
                             let mut style = button::secondary(theme, status);
@@ -408,19 +403,16 @@ impl State {
                         ExtendedNetwork::Regtest,
                     ];
                     match self.config.backend.as_ref().unwrap() {
-                        ConfigBackend::Akrond { network, .. } => {
-                            base_container(
+                        ConfigBackend::Akrond { network, .. } => base_container(
                             Form::new("Connect", Some(Message::Connect)).add_pick_list(
                                 "Chain",
                                 [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
                                 Some(network),
                                 Message::NetworkSelect,
-                            ))
-                        }
+                            )),
                         ConfigBackend::Bitcoind {
                             network,
                             url,
-                            cookie,
                             user,
                             password,
                         } => base_container(Form::new("Connect", Some(Message::Connect))
@@ -430,7 +422,6 @@ impl State {
                                 url,
                                 Message::UrlInput,
                             )
-                            .add_text_input("Auth cookie", "none", cookie, Message::CookieInput)
                             .add_text_input("User login", "none", user, Message::UserInput)
                             .add_text_input(
                                 "User password",
@@ -444,21 +435,31 @@ impl State {
                                 Some(network),
                                 Message::NetworkSelect,
                             )),
-                        ConfigBackend::Spaced { network, url } => {
-                            base_container(Form::new("Connect", Some(Message::Connect))
-                                .add_text_input(
-                                    "Spaced JSON-RPC URL",
-                                    "http://127.0.0.1:8332",
-                                    url,
-                                    Message::UrlInput,
-                                )
-                                .add_pick_list(
-                                    "Chain",
-                                    networks,
-                                    Some(network),
-                                    Message::NetworkSelect,
-                                ))
-                        }
+                        ConfigBackend::Spaced {
+                            network,
+                            url,
+                            user,
+                            password,
+                        } => base_container(Form::new("Connect", Some(Message::Connect))
+                            .add_text_input(
+                                "Spaced JSON-RPC URL",
+                                "http://127.0.0.1:8332",
+                                url,
+                                Message::UrlInput,
+                            )
+                            .add_text_input("User login", "none", user, Message::UserInput)
+                            .add_text_input(
+                                "User password",
+                                "none",
+                                password,
+                                Message::PasswordInput,
+                            )
+                            .add_pick_list(
+                                "Chain",
+                                networks,
+                                Some(network),
+                                Message::NetworkSelect,
+                            ))
                     }
                 },
             ]
