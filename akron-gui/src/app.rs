@@ -96,10 +96,9 @@ impl State {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        if let Self::Main(state) = self {
-            state.subscription().map(Message::Main)
-        } else {
-            Subscription::none()
+        match self {
+            Self::Setup(state) => state.subscription().map(Message::Setup),
+            Self::Main(state) => state.subscription().map(Message::Main),
         }
     }
 }

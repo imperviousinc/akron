@@ -1,10 +1,9 @@
-use std::time::Duration;
-
-use iced::Task;
+use iced::{Subscription, Task};
 use jsonrpsee::{
     core::ClientError,
     http_client::{HttpClient, HttpClientBuilder},
 };
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 use spaces_client::{
     config::default_spaces_rpc_port,
@@ -38,9 +37,10 @@ use crate::ConfigBackend;
 
 #[derive(Debug, Clone)]
 pub struct Client {
+    id: usize,
     client: HttpClient,
     shutdown: Option<tokio::sync::broadcast::Sender<()>>,
-    pub logs: Option<tokio::sync::broadcast::Sender<String>>,
+    logs: Option<tokio::sync::broadcast::Sender<String>>,
 }
 
 pub type ClientResult<T> = Result<T, String>;
@@ -222,51 +222,9 @@ impl Client {
         let client = HttpClientBuilder::default()
             .build(spaces_rpc_url)
             .map_err(|e| e.to_string())?;
-        let mut server_info_result = client.get_server_info().await;
-        let mut failed_attempts = 0;
-        while failed_attempts < 5 {
-            server_info_result = client.get_server_info().await;
-            if let Ok(server_info) = server_info_result.as_ref() {
-                match &backend_config {
-                    ConfigBackend::Akrond { .. } => {}
-                    ConfigBackend::Bitcoind { network, .. }
-                    | ConfigBackend::Spaced { network, .. } => {
-                        if server_info.network != network.to_string() {
-                            if let Some(shutdown) = shutdown {
-                                let _ = shutdown.send(());
-                            }
-                            return Err("Wrong network".to_string());
-                        }
-                    }
-                }
-                if server_info.chain.headers
-                    >= (match &backend_config {
-                        ConfigBackend::Akrond { prune_point, .. } => {
-                            prune_point.map_or(0, |p| p.height)
-                        }
-                        ConfigBackend::Bitcoind { network, .. }
-                        | ConfigBackend::Spaced { network, .. } => match network {
-                            ExtendedNetwork::Mainnet => ChainAnchor::MAINNET().height,
-                            ExtendedNetwork::Testnet4 => ChainAnchor::TESTNET4().height,
-                            _ => 0,
-                        },
-                    })
-                {
-                    break;
-                }
-            } else {
-                failed_attempts += 1;
-            }
-            let _ = tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-        if let Err(e) = server_info_result {
-            if let Some(shutdown) = shutdown {
-                let _ = shutdown.send(());
-            }
-            return Err(e.to_string());
-        }
         Ok((
             Self {
+                id: rand::random(),
                 client,
                 shutdown,
                 logs,
@@ -678,6 +636,15 @@ impl Client {
             },
             map_wallet_result,
         )
+    }
+
+    pub fn logs_subscription(&self) -> Subscription<String> {
+        if let Some(sender) = &self.logs {
+            let stream = BroadcastStream::new(sender.subscribe()).filter_map(|result| result.ok());
+            Subscription::run_with_id(format!("client_logs_{}", self.id), stream)
+        } else {
+            Subscription::none()
+        }
     }
 }
 

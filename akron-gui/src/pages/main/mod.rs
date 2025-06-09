@@ -15,8 +15,7 @@ use iced::{
     },
     Center, Color, Element, Fill, Font, Padding, Subscription, Task, Theme,
 };
-use std::collections::VecDeque;
-use std::time::Duration;
+use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
 use crate::{
     client::*,
@@ -41,9 +40,6 @@ enum Screen {
     Settings,
 }
 
-const EXPANDED_LOGS_HEIGHT: u16 = 280;
-const MAX_LOGS_BUFFER: usize = 50;
-
 #[derive(Debug)]
 pub struct State {
     config: Config,
@@ -59,9 +55,8 @@ pub struct State {
     market_screen: market::State,
     sign_screen: sign::State,
     settings_screen: settings::State,
-    logs_rx: Option<tokio::sync::broadcast::Receiver<String>>,
-    log_buffer: VecDeque<String>,
-    logs_height: u16,
+    log_buffer: ConstGenericRingBuffer<String, 100>,
+    logs_expanded: bool,
     fee_rate_selector: FeeRateSelector,
     fee_rate: Option<FeeRate>,
     fee_rate_confirmed_message: Option<Message>,
@@ -84,7 +79,7 @@ pub enum Route {
 pub enum Message {
     Tick,
     ToggleLogs,
-    DrainLogs,
+    LogReceived(String),
     NavigateTo(Route),
     ServerInfo(ClientResult<ServerInfo>),
     ListWallets(ClientResult<Vec<String>>),
@@ -116,8 +111,6 @@ pub enum Action {
 
 impl State {
     pub fn run(config: Config, client: Client) -> (Self, Task<Message>) {
-        let logs_rx = client.logs.as_ref().map(|l| l.subscribe());
-
         let state = Self {
             config,
             client,
@@ -132,9 +125,8 @@ impl State {
             market_screen: Default::default(),
             sign_screen: Default::default(),
             settings_screen: Default::default(),
-            logs_rx,
-            log_buffer: VecDeque::new(),
-            logs_height: 0,
+            log_buffer: Default::default(),
+            logs_expanded: false,
             fee_rate_selector: Default::default(),
             fee_rate: None,
             fee_rate_confirmed_message: None,
@@ -271,17 +263,6 @@ impl State {
 
     pub fn update(&mut self, message: Message) -> Action {
         match message {
-            Message::DrainLogs => {
-                if let Some(rx) = self.logs_rx.as_mut() {
-                    while let Ok(log_msg) = rx.try_recv() {
-                        if self.log_buffer.len() >= MAX_LOGS_BUFFER {
-                            self.log_buffer.pop_front();
-                        }
-                        self.log_buffer.push_back(log_msg);
-                    }
-                }
-                Action::Task(Task::none())
-            }
             Message::Tick => {
                 let mut tasks = vec![self.get_server_info(), self.get_wallet_info()];
                 match self.screen {
@@ -298,6 +279,10 @@ impl State {
                     _ => {}
                 }
                 Action::Task(Task::batch(tasks))
+            }
+            Message::LogReceived(log) => {
+                self.log_buffer.push(log);
+                Action::Task(Task::none())
             }
             Message::NavigateTo(route) => Action::Task(self.navigate_to(route)),
             Message::ServerInfo(result) => {
@@ -694,11 +679,7 @@ impl State {
                 settings::Action::None => Action::Task(Task::none()),
             },
             Message::ToggleLogs => {
-                if self.logs_height == 0 {
-                    self.logs_height = EXPANDED_LOGS_HEIGHT;
-                } else {
-                    self.logs_height = 0;
-                }
+                self.logs_expanded = !self.logs_expanded;
                 Action::Task(Task::none())
             }
             // Fee rate modal
@@ -910,8 +891,7 @@ impl State {
             return None;
         }
 
-        let logs_expanded = self.logs_height != 0;
-        let toggle_icon = if logs_expanded {
+        let toggle_icon = if self.logs_expanded {
             text_icon(Icon::ChevronDown)
         } else {
             text_icon(Icon::ChevronRight)
@@ -935,7 +915,7 @@ impl State {
             })
             .on_press(Message::ToggleLogs);
 
-        let (log_header, logs) = if logs_expanded {
+        let (log_header, logs) = if self.logs_expanded {
             (
                 text_small("Status: "),
                 Some(
@@ -961,7 +941,7 @@ impl State {
                         bottom: 10.0,
                         left: 10.0,
                     })
-                    .height(self.logs_height)
+                    .height(280)
                     .width(Fill),
                 ),
             )
@@ -981,7 +961,7 @@ impl State {
             let palette = theme.extended_palette();
             container::Style {
                 text_color: None,
-                background: if !logs_expanded {
+                background: if !self.logs_expanded {
                     Some(palette.background.weak.color.into())
                 } else {
                     None
@@ -1026,7 +1006,7 @@ impl State {
         )
         .map(|_| Message::Tick);
 
-        let logs = time::every(Duration::from_millis(200)).map(|_| Message::DrainLogs);
+        let logs = self.client.logs_subscription().map(Message::LogReceived);
 
         let fee_rate = self
             .fee_rate_selector
