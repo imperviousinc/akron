@@ -1,0 +1,12 @@
+<svg width="590" height="590" viewBox="0 0 590 590" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="akron_linear_gradient" x1="915.8" y1="-462.157" x2="112.973" y2="628.309" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF72F3"/>
+<stop offset="0.5" stop-color="#FAAEFD"/>
+<stop offset="1" stop-color="#FF9073"/>
+</linearGradient>
+</defs>
+<g transform="translate(45, 0)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M294.854 0.149353L500 410.439L251.183 559.723V439.138L0 589.851L294.854 0.149353ZM332.954 294.7V415.285L398.97 375.684L294.854 167.446L187.624 381.909L332.954 294.7Z" fill="url(#akron_linear_gradient)"/>
+</g>
+</svg>

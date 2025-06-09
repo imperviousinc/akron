@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '*.*.*'
   workflow_dispatch:
 
 jobs:
@@ -17,6 +17,8 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
           - os: macos-13
@@ -28,13 +30,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get the tag name
-        id: get_tag
+      - name: Get version and validate
+        id: get_version
         shell: bash
         run: |
-          echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "TAG=dev-$(date +'%Y%m%d%H%M')" >> $GITHUB_ENV
+          VERSION=$(grep -E '^version = ' Cargo.toml | head -1 | sed 's/version = "//g' | sed 's/"//g')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_VERSION=${GITHUB_REF##*/}
+
+            if [[ "$VERSION" != "$TAG_VERSION" ]]; then
+              echo "ERROR: Version mismatch!"
+              echo "Cargo.toml version: $VERSION"
+              echo "Git tag version: $TAG_VERSION"
+              exit 1
+            fi
           fi
 
       - name: Get OS and architecture
@@ -50,29 +61,60 @@ jobs:
           if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
             echo "ARCH=arm64" >> $GITHUB_ENV
           else
-            echo "ARCH=x86_64" >> $GITHUB_ENV
+            echo "ARCH=amd64" >> $GITHUB_ENV
           fi
 
       - name: Set bundle name
         shell: bash
         run: |
-          echo "BUNDLE_NAME=akron-${{ env.TAG }}-${{ env.OS }}-${{ env.ARCH }}" >> $GITHUB_ENV
+          echo "BUNDLE_NAME=akron-${{ env.VERSION }}-${{ env.OS }}-${{ env.ARCH }}" >> $GITHUB_ENV
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.target }}
 
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: |
           cargo build --bin akron-gui --release --target ${{ matrix.target }}
 
-      - name: Create Linux app bundle
+      - name: Create Linux bundle and packages
         if: env.OS == 'linux'
         run: |
-          mkdir ${{ env.BUNDLE_NAME }}
-          cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}
+          # Linux bundle
+          mkdir -p ${{ env.BUNDLE_NAME }}/bin
+          mkdir -p ${{ env.BUNDLE_NAME }}/share/applications
+          mkdir -p ${{ env.BUNDLE_NAME }}/share/icons/hicolor/64x64/apps
+
+          cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}/bin/akron
+          cp .github/akron.desktop ${{ env.BUNDLE_NAME }}/share/applications/
+          cp -r assets/hicolor/* ${{ env.BUNDLE_NAME }}/share/icons/hicolor/
+
           tar -czf ${{ env.BUNDLE_NAME }}.tar.gz ${{ env.BUNDLE_NAME }}
+
+          # deb package
+          mkdir -p packaging/deb/usr
+          cp -r ${{ env.BUNDLE_NAME }}/* packaging/deb/usr/
+
+          mkdir -p packaging/deb/DEBIAN
+          envsubst < .github/control.template > packaging/deb/DEBIAN/control
+          cp .github/postinst packaging/deb/DEBIAN/postinst
+          chmod 755 packaging/deb/DEBIAN/postinst
+          cp .github/postrm packaging/deb/DEBIAN/postrm
+          chmod 755 packaging/deb/DEBIAN/postrm
+          dpkg-deb --build packaging/deb ${{ env.BUNDLE_NAME }}.deb
+
+          # rpm package
+          sudo apt-get install -y alien
+          sudo alien --to-rpm --scripts ${{ env.BUNDLE_NAME }}.deb
+          mv *.rpm ${{ env.BUNDLE_NAME }}.rpm
 
       - name: Install create-dmg
         if: env.OS == 'darwin'
@@ -101,10 +143,15 @@ jobs:
           cp target/${{ matrix.target }}/release/akron-gui ${{ env.BUNDLE_NAME }}/Akron.app/Contents/MacOS/
 
           mkdir -p iconbuild.iconset
-          sips -z 16 16 assets/akron.png --out iconbuild.iconset/icon_16x16.png
-          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_16x16@2x.png
-          sips -z 32 32 assets/akron.png --out iconbuild.iconset/icon_32x32.png
-          sips -z 64 64 assets/akron.png --out iconbuild.iconset/icon_32x32@2x.png
+          cp assets/hicolor/16x16/apps/akron.png iconbuild.iconset/icon_16x16.png
+          cp assets/hicolor/32x32/apps/akron.png iconbuild.iconset/icon_16x16@2x.png
+          cp assets/hicolor/32x32/apps/akron.png iconbuild.iconset/icon_32x32.png
+          cp assets/hicolor/64x64/apps/akron.png iconbuild.iconset/icon_32x32@2x.png
+          cp assets/hicolor/128x128/apps/akron.png iconbuild.iconset/icon_128x128.png
+          cp assets/hicolor/256x256/apps/akron.png iconbuild.iconset/icon_128x128@2x.png
+          cp assets/hicolor/256x256/apps/akron.png iconbuild.iconset/icon_256x256.png
+          cp assets/hicolor/512x512/apps/akron.png iconbuild.iconset/icon_256x256@2x.png
+          cp assets/hicolor/512x512/apps/akron.png iconbuild.iconset/icon_512x512.png
           iconutil -c icns iconbuild.iconset -o icon.icns
           cp icon.icns ${{ env.BUNDLE_NAME }}/Akron.app/Contents/Resources/
           
@@ -146,13 +193,13 @@ jobs:
           echo "Verifying stapled DMG..."
           xcrun stapler validate ${{ env.BUNDLE_NAME }}.dmg
 
-      - name: Create Windows bundle
+      - name: Create Windows bundle and installer
         if: env.OS == 'windows'
         shell: powershell
         run: |
           choco install imagemagick.app -y
           choco install reshack -y
-          magick assets/akron.png -define icon:auto-resize=16,32,48,64 akron.ico
+          magick @(16,24,32,48,64,96,128,256,512 | ForEach-Object {"assets/hicolor/${_}x${_}/apps/akron.png"}) akron.ico
 
           $bundleName = "${{ env.BUNDLE_NAME }}"
           $sourceExe = "target\${{ matrix.target }}\release\akron-gui.exe"
@@ -167,11 +214,7 @@ jobs:
           7z a -tzip $zipFile $bundleName
 
           $env:BUNDLE_NAME = $bundleName
-          $env:VERSION = if ($env:TAG -match "^v?(\d+)\.(\d+)\.(\d+)") {
-            "$($matches[1]).$($matches[2]).$($matches[3]).0"
-          } else {
-            "0.0.0.1"
-          }
+          $env:VERSION = "${{ env.VERSION }}.0"
           (Get-Content ".github\akron.wxs.template") -replace '\$VERSION', $env:VERSION -replace '\$BUNDLE_NAME', $env:BUNDLE_NAME | Out-File -FilePath "akron.wxs" -Encoding UTF8
           
           & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" akron.wxs
@@ -183,6 +226,7 @@ jobs:
         shell: bash
         run: |
           artifacts=$(find . -maxdepth 1 -name "${{ env.BUNDLE_NAME }}.*" -type f | sort)
+
           echo "Found artifacts:"
           echo "$artifacts"
           
@@ -203,11 +247,10 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG }} 
-          name: Release ${{ env.TAG }}
+          name: ${{ github.event_name == 'workflow_dispatch' && 'Development Build' || 'Release' }} ${{ env.VERSION }}
           body: |
-            Akron release of version ${{ env.TAG }}.
-          draft: false
+            Akron release of version ${{ env.VERSION }}.
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: false
           files: ${{ steps.find_artifacts.outputs.artifacts }}
           make_latest: true

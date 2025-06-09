@@ -1,18 +1,40 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-import os
+from pathlib import Path
 from io import BytesIO
 from PIL import Image
 import fontforge
+import ffmpeg
+import shutil
+
+def build_hicolor_set(svg_path, output_dir):
+    sizes = [128, 150, 16, 192, 22, 24, 256, 310, 32, 36, 44, 48, 512, 64, 72, 96]
+    name = svg_path.stem
+
+    for size in sizes:
+        size_dir = output_dir / f"{size}x{size}" / "apps"
+        size_dir.mkdir(parents=True, exist_ok=True)
+
+        (
+            ffmpeg
+            .input(str(svg_path))
+            .filter('scale', size, size)
+            .output(str(size_dir / f"{name}.png"))
+            .overwrite_output()
+            .run()
+        )
+
+    scalable_dir = output_dir / "scalable" / "apps"
+    scalable_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(svg_path, scalable_dir / f"{name}.svg")
 
 def build_rgba(image_path, rgba_path):
-    with open(image_path, "rb") as f:
-        data = BytesIO(f.read())
-    img = Image.open(data)
-    img = img.convert("RGBA")
-    data = img.tobytes()
-    with open(rgba_path, "wb") as f:
-        f.write(data)
+    with Image.open(image_path) as img:
+        img = img.convert('RGBA')
+        rgba_data = img.tobytes()
+
+    with open(rgba_path, 'wb') as f:
+        f.write(rgba_data)
 
 def build_icons_font(icons_path, font_path, rs_path, font_name):
     font = fontforge.font()
@@ -21,15 +43,15 @@ def build_icons_font(icons_path, font_path, rs_path, font_name):
     font.fullname = font_name
     font.em = 1000
     icons = []
-    for i, svg in enumerate(os.listdir(icons_path)):
-        if not svg.endswith('.svg'):
-            continue
-        name = ''.join(x.title() for x in svg[:-4].split('-'))
+
+    for i, svg_file in enumerate(icons_path.glob('*.svg')):
+        name = ''.join(x.title() for x in svg_file.stem.split('-'))
         char = 0xE000 + i
         glyph = font.createChar(char)
-        glyph.importOutlines(os.path.join(icons_path, svg))
+        glyph.importOutlines(str(svg_file))
         glyph.width = 1000
         icons.append((name, char))
+
     with open(rs_path, "w") as f:
         f.write(f"pub const FONT: iced::Font = iced::Font::with_name(\"{font_name}\");\n")
         f.write("pub enum Icon {\n")
@@ -42,18 +64,26 @@ def build_icons_font(icons_path, font_path, rs_path, font_name):
         f.write("        }\n")
         f.write("    }\n")
         f.write("}\n")
-    font.generate(font_path)
+
+    font.generate(str(font_path))
     font.close()
 
 if __name__ == "__main__":
-    assets_dir = os.path.dirname(os.path.abspath(__file__))
-    build_rgba(
-        os.path.join(assets_dir, "akron.png"),
-        os.path.join(assets_dir, "akron.rgba"),
+    assets_dir = Path(__file__).parent
+
+    build_hicolor_set(
+        assets_dir / "akron.svg",
+        assets_dir / "hicolor",
     )
+
+    build_rgba(
+        assets_dir / "hicolor" / "64x64" / "apps" / "akron.png",
+        assets_dir / "akron.rgba",
+    )
+
     build_icons_font(
-        os.path.join(assets_dir, "icons"),
-        os.path.join(assets_dir, "icons.ttf"),
-        os.path.join(assets_dir, "icons.rs"),
+        assets_dir / "icons",
+        assets_dir / "icons.ttf",
+        assets_dir / "icons.rs",
         "icons",
     )
