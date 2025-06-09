@@ -55,7 +55,7 @@ pub struct State {
     market_screen: market::State,
     sign_screen: sign::State,
     settings_screen: settings::State,
-    log_buffer: ConstGenericRingBuffer<String, 50>,
+    log_buffer: ConstGenericRingBuffer<String, 100>,
     logs_expanded: bool,
     fee_rate_selector: FeeRateSelector,
     fee_rate: Option<FeeRate>,
