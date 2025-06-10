@@ -2,13 +2,14 @@ use crate::widget::base::{base_container, result_column};
 use crate::widget::form::STANDARD_PADDING;
 use crate::widget::{
     form::{pick_list, submit_button, text_input},
-    text::text_big,
+    text::{text_big, text_bold},
 };
-use iced::border::rounded;
 use iced::{
+    border::rounded,
     widget::{button, column, row, text},
     Center, Element, Fill, Shrink, Theme,
 };
+use spaces_client::config::ExtendedNetwork;
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -82,6 +83,8 @@ impl State {
 
     pub fn view<'a>(
         &'a self,
+        network: ExtendedNetwork,
+        tip_height: u32,
         wallets_names: Vec<&'a String>,
         wallet_name: Option<&'a String>,
     ) -> Element<'a, Message> {
@@ -135,6 +138,11 @@ impl State {
                 .spacing(40),
                 column![
                     text_big("Backend"),
+                    column![
+                        row![text_bold("Network: "), text(network.to_string()),],
+                        row![text_bold("Block height: "), text(tip_height.to_string()),],
+                    ]
+                    .spacing(20),
                     button(text("Reset backend settings").align_x(Center).width(Fill))
                         .on_press(Message::ResetBackendPress)
                         .style(|t: &Theme, status: button::Status| {

@@ -34,6 +34,16 @@ pub enum ConfigBackend {
     },
 }
 
+impl ConfigBackend {
+    pub fn network(&self) -> ExtendedNetwork {
+        match self {
+            Self::Akrond { network, .. } => *network,
+            Self::Bitcoind { network, .. } => *network,
+            Self::Spaced { network, .. } => *network,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(skip)]
