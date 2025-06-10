@@ -874,6 +874,8 @@ impl State {
                             Screen::Settings => self
                                 .settings_screen
                                 .view(
+                                    self.config.backend.as_ref().unwrap().network(),
+                                    self.tip_height,
                                     self.wallets.get_wallets(),
                                     self.wallets.get_current().map(|w| w.label),
                                 )
