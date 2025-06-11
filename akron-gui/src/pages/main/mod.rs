@@ -331,7 +331,7 @@ impl State {
             }) => {
                 if let Ok(balance) = result {
                     if let Some(wallet_state) = self.wallets.get_data_mut(&wallet) {
-                        wallet_state.balance = balance.balance;
+                        wallet_state.balance = Some(balance.balance);
                     }
                 }
                 Action::Task(Task::none())
@@ -874,6 +874,8 @@ impl State {
                             Screen::Settings => self
                                 .settings_screen
                                 .view(
+                                    self.config.backend.as_ref().unwrap().network(),
+                                    self.tip_height,
                                     self.wallets.get_wallets(),
                                     self.wallets.get_current().map(|w| w.label),
                                 )

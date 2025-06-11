@@ -59,7 +59,7 @@ impl AddressData {
 #[derive(Debug, Default)]
 pub struct WalletData {
     pub info: Option<WalletInfoWithProgress>,
-    pub balance: Amount,
+    pub balance: Option<Amount>,
     pub coin_address: Option<AddressData>,
     pub space_address: Option<AddressData>,
     pub winning_spaces: Vec<SLabel>,
