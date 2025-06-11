@@ -331,7 +331,7 @@ impl State {
             }) => {
                 if let Ok(balance) = result {
                     if let Some(wallet_state) = self.wallets.get_data_mut(&wallet) {
-                        wallet_state.balance = balance.balance;
+                        wallet_state.balance = Some(balance.balance);
                     }
                 }
                 Action::Task(Task::none())
