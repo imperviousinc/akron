@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, row, scrollable, text, text_editor},
+    widget::{button, column, container, horizontal_space, row, scrollable, text, Column},
     Bottom, Center, Color, Element, Fill, Font, Subscription, Task, Theme,
 };
 use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
@@ -11,9 +11,9 @@ use crate::{
     client::{Client, ClientResult, ServerInfo},
     widget::{
         base::base_container,
-        form::{submit_button, Form},
+        form::{submit_button, text_input, Form},
         icon::{button_icon, text_icon, Icon},
-        text::{error_block, text_big, text_bold, text_semibold, text_small},
+        text::{error_block, text_big, text_bold, text_monospace, text_semibold, text_small},
     },
     Config, ConfigBackend,
 };
@@ -24,7 +24,8 @@ pub struct State {
     client: Option<Client>,
     connecting: bool,
     logs: ConstGenericRingBuffer<String, 100>,
-    mnemonic: Option<text_editor::Content>,
+    mnemonic: Option<[String; 12]>,
+    mnemonic_target: Option<[String; 12]>,
     error: Option<String>,
 }
 
@@ -41,9 +42,11 @@ pub enum Message {
     ListWalletsResult(ClientResult<Vec<String>>),
     Reset,
     Disconnect,
-    MnemonicToggle,
-    MnemonicAction(text_editor::Action),
+    MnemonicClear,
+    MnemonicBlank,
+    MnemonicWordInput(usize, String),
     CreateWallet,
+    RestoreWallet,
     ImportWallet,
     ImportWalletPicked(Result<String, String>),
     SetWalletResult(Result<String, String>),
@@ -75,6 +78,7 @@ impl State {
                 connecting: false,
                 logs: Default::default(),
                 mnemonic: None,
+                mnemonic_target: None,
                 error: None,
             },
             task,
@@ -241,34 +245,50 @@ impl State {
                 self.client = None;
                 Action::none()
             }
-            Message::MnemonicToggle => {
-                if self.mnemonic.is_some() {
-                    self.mnemonic = None;
-                } else {
-                    use spaces_wallet::bdk_wallet::{
-                        keys::{
-                            bip39::{Language, Mnemonic, WordCount},
-                            GeneratableKey, GeneratedKey,
-                        },
-                        miniscript::Tap,
-                    };
-                    let mnemonic: GeneratedKey<_, Tap> =
-                        Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
-                    self.mnemonic = Some(text_editor::Content::with_text(&mnemonic.to_string()));
+            Message::MnemonicClear => {
+                self.mnemonic = None;
+                self.mnemonic_target = None;
+                Action::none()
+            }
+            Message::MnemonicBlank => {
+                self.mnemonic = Some(Default::default());
+                Action::none()
+            }
+            Message::MnemonicWordInput(i, word) => {
+                if word.chars().all(|c| c.is_ascii_lowercase()) {
+                    self.mnemonic.as_mut().unwrap()[i] = word;
                 }
                 Action::none()
             }
-            Message::MnemonicAction(action) => {
-                self.mnemonic.as_mut().unwrap().perform(action);
+            Message::CreateWallet => {
+                use spaces_wallet::bdk_wallet::{
+                    keys::{
+                        bip39::{Language, Mnemonic, WordCount},
+                        GeneratableKey, GeneratedKey,
+                    },
+                    miniscript::Tap,
+                };
+                let mnemonic: GeneratedKey<_, Tap> =
+                    Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+                self.mnemonic_target = Some(
+                    mnemonic
+                        .to_string()
+                        .split(' ')
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap(),
+                );
+                self.mnemonic = None;
                 Action::none()
             }
-            Message::CreateWallet => Action::Task(
+            Message::RestoreWallet => Action::Task(
                 self.client
                     .as_ref()
                     .unwrap()
                     .restore_wallet(
                         "default".to_string(),
-                        self.mnemonic.as_ref().unwrap().text(),
+                        self.mnemonic.as_ref().unwrap().join(" "),
                     )
                     .map(|r| Message::SetWalletResult(r.result.map(|_| r.label))),
             ),
@@ -496,18 +516,92 @@ impl State {
                 row![
                     button_icon(Icon::ChevronLeft)
                         .style(button::text)
-                        .on_press(Message::MnemonicToggle),
-                    text_big("Create a new wallet from a mnemonic phrase"),
+                        .on_press(Message::MnemonicClear),
+                    text_big("Enter the mnemonic phrase"),
                 ]
                 .align_y(Center),
                 error_block(self.error.as_ref()),
-                base_container(Form::new("Create", Some(Message::CreateWallet))
-                .add_text_editor(
-                    "Mnemonic phrase",
-                    "space separated words",
-                    mnemonic,
-                    Message::MnemonicAction,
-                ))
+                row![
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_input("word", word)
+                                        .on_input(move |w| Message::MnemonicWordInput(i, w))
+                                ].align_y(Bottom).spacing(5).into()
+                            })
+                    ).spacing(5),
+                    horizontal_space(),
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .skip(1)
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_input("word", word)
+                                        .on_input(move |w| Message::MnemonicWordInput(i, w))
+                                ].align_y(Bottom).spacing(5).into()
+                            })
+                    ).spacing(5),
+                ].padding([30, 100]).spacing(40),
+                submit_button(
+                    text("Continue").width(Fill).align_x(Center),
+                    if mnemonic.iter().all(|word| !word.is_empty()) && self.mnemonic_target.as_ref().map_or(true, |target| target == mnemonic) {
+                        Some(Message::RestoreWallet)
+                    } else {
+                        None
+                    }
+                ),
+            ]
+            .spacing(10)
+        } else if let Some(mnemonic) = self.mnemonic_target.as_ref() {
+            column![
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::MnemonicClear),
+                    text_big("Write down the mnemonic phrase"),
+                ]
+                .align_y(Center),
+                row![
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_semibold(word).size(30),
+                                ].align_y(Bottom).spacing(5).into()
+                            })
+                    ).spacing(30),
+                    horizontal_space(),
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .skip(1)
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_semibold(word).size(30),
+                                ].align_y(Bottom).spacing(5).into()
+                            })
+                    ).spacing(30),
+                ].padding([30, 100]).spacing(40),
+                submit_button(
+                    text("Continue").width(Fill).align_x(Center),
+                    Some(Message::MnemonicBlank),
+                ),
             ]
             .spacing(10)
         } else {
@@ -523,20 +617,26 @@ impl State {
                 row![
                     column![
                         text_icon(Icon::WalletMinimal).size(150),
-                        text_semibold("Create a new spaces wallet").size(20),
-                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::MnemonicToggle)),
+                        text("Create a new spaces wallet").size(20),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::CreateWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
                     column![
                         text_icon(Icon::FolderDown).size(150),
-                        text_semibold("Load an existing spaces wallet").size(20),
+                        text("Restore a wallet from a mnemonic").size(20),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::MnemonicBlank)),
+                    ]
+                    .align_x(Center)
+                    .spacing(30),
+                    column![
+                        text_icon(Icon::FolderDown).size(150),
+                        text("Load an existing spaces wallet").size(20),
                         submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::ImportWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
-                ].align_y(Bottom)
-                .spacing(140).padding([0, 140]),
+                ].align_y(Bottom).padding([0, 80]).spacing(80)
             ]
             .spacing(10)
         })
