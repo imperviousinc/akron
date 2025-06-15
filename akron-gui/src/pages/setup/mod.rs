@@ -134,6 +134,7 @@ impl State {
                 if self.connecting {
                     return Action::none();
                 }
+                self.logs.clear();
                 self.connecting = true;
                 let data_dir = self.config.data_dir().to_path_buf();
                 let backend_config = self.config.backend.clone().unwrap();
@@ -530,9 +531,9 @@ impl State {
                             .map(|(i, word)| {
                                 row![
                                     text_monospace(format!("{:02}.", i + 1)).size(30),
-                                    text_input("word", word)
+                                    text_input("", word)
                                         .on_input(move |w| Message::MnemonicWordInput(i, w))
-                                ].align_y(Bottom).spacing(5).into()
+                                ].align_y(Center).spacing(5).into()
                             })
                     ).spacing(10),
                     horizontal_space(),
@@ -545,9 +546,9 @@ impl State {
                             .map(|(i, word)| {
                                 row![
                                     text_monospace(format!("{:02}.", i + 1)).size(30),
-                                    text_input("word", word)
+                                    text_input("", word)
                                         .on_input(move |w| Message::MnemonicWordInput(i, w))
-                                ].align_y(Bottom).spacing(5).into()
+                                ].align_y(Center).spacing(5).into()
                             })
                     ).spacing(10),
                 ].padding([30, 100]).spacing(40),
@@ -579,10 +580,10 @@ impl State {
                             .map(|(i, word)| {
                                 row![
                                     text_monospace(format!("{:02}.", i + 1)).size(30),
-                                    text_semibold(word).size(30),
-                                ].align_y(Bottom).spacing(5).into()
+                                    container(text_semibold(word).size(30)).padding([12, 0]),
+                                ].align_y(Center).spacing(5).into()
                             })
-                    ).spacing(30),
+                    ).spacing(10),
                     horizontal_space(),
                     Column::with_children(
                         mnemonic
@@ -593,10 +594,10 @@ impl State {
                             .map(|(i, word)| {
                                 row![
                                     text_monospace(format!("{:02}.", i + 1)).size(30),
-                                    text_semibold(word).size(30),
-                                ].align_y(Bottom).spacing(5).into()
+                                    container(text_semibold(word).size(30)).padding([12, 0]),
+                                ].align_y(Center).spacing(5).into()
                             })
-                    ).spacing(30),
+                    ).spacing(10),
                 ].padding([30, 100]).spacing(40),
                 submit_button(
                     text("Continue").width(Fill).align_x(Center),
