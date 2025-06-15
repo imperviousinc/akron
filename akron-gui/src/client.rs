@@ -1,8 +1,5 @@
 use iced::{Subscription, Task};
-use jsonrpsee::{
-    core::ClientError,
-    http_client::{HttpClient, HttpClientBuilder},
-};
+use jsonrpsee::{core::ClientError, http_client::HttpClient};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 use spaces_client::{
@@ -16,6 +13,7 @@ use spaces_client::{
 use spaces_protocol::constants::ChainAnchor;
 
 pub use spaces_client::{
+    auth::{auth_token_from_creds, http_client_with_auth},
     rpc::ServerInfo,
     wallets::{AddressKind, ListSpacesResponse, TxInfo, WalletInfoWithProgress, WalletResponse},
 };
@@ -65,6 +63,18 @@ fn map_wallet_result<T>((label, result): (String, Result<T, ClientError>)) -> Wa
     }
 }
 
+fn random_password() -> String {
+    use rand::{
+        distributions::Alphanumeric,
+        {thread_rng, Rng},
+    };
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect::<String>()
+}
+
 impl Client {
     pub async fn create(
         data_dir: std::path::PathBuf,
@@ -73,7 +83,7 @@ impl Client {
         let mut logs = None;
         // TODO: move this as a command line flag --no-capture-logs (uses stdout instead)
         const CAPTURE_LOGS: bool = true;
-        let (spaces_rpc_url, shutdown) = match &mut backend_config {
+        let (spaces_rpc_url, spaces_user, spaces_password, shutdown) = match &mut backend_config {
             ConfigBackend::Akrond {
                 network,
                 prune_point,
@@ -91,11 +101,16 @@ impl Client {
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
+                let password = random_password();
                 let spaces_args: Vec<String> = [
                     "--chain",
                     &network.to_string(),
                     "--bitcoin-rpc-url",
                     "http://127.0.0.1:8225",
+                    "--rpc-user",
+                    "akron",
+                    "--rpc-password",
+                    &password,
                     "--data-dir",
                     spaces_data_dir.to_str().unwrap(),
                     "--bitcoin-rpc-light",
@@ -169,13 +184,14 @@ impl Client {
                 }
                 (
                     format!("http://127.0.0.1:{}", default_spaces_rpc_port(network)),
+                    "akron".to_string(),
+                    password,
                     Some(shutdown),
                 )
             }
             ConfigBackend::Bitcoind {
                 network,
                 url,
-                cookie,
                 user,
                 password,
             } => {
@@ -183,6 +199,7 @@ impl Client {
                 logs = akron.subscribe_logs();
                 let spaces_data_dir = data_dir.join("spaces");
                 let network_string = network.to_string();
+                let spaces_password = random_password();
                 let mut spaces_args = vec![
                     "--chain",
                     &network_string,
@@ -190,10 +207,11 @@ impl Client {
                     spaces_data_dir.to_str().unwrap(),
                     "--bitcoin-rpc-url",
                     url,
+                    "--rpc-user",
+                    "akron",
+                    "--rpc-password",
+                    &spaces_password,
                 ];
-                if !cookie.is_empty() {
-                    spaces_args.extend_from_slice(&["--bitcoin-rpc-cookie", cookie]);
-                }
                 if !user.is_empty() {
                     spaces_args.extend_from_slice(&[
                         "--bitcoin-rpc-user",
@@ -214,14 +232,28 @@ impl Client {
                 }
                 (
                     format!("http://127.0.0.1:{}", default_spaces_rpc_port(network)),
+                    "akron".to_string(),
+                    spaces_password,
                     Some(shutdown),
                 )
             }
-            ConfigBackend::Spaced { url, .. } => (url.to_string(), None),
+            ConfigBackend::Spaced {
+                url,
+                user,
+                password,
+                ..
+            } => (
+                url.to_string(),
+                user.to_string(),
+                password.to_string(),
+                None,
+            ),
         };
-        let client = HttpClientBuilder::default()
-            .build(spaces_rpc_url)
-            .map_err(|e| e.to_string())?;
+        let client = http_client_with_auth(
+            &spaces_rpc_url,
+            &auth_token_from_creds(&spaces_user, &spaces_password),
+        )
+        .map_err(|e| e.to_string())?;
         Ok((
             Self {
                 id: rand::random(),
@@ -260,11 +292,22 @@ impl Client {
         Task::perform(async move { client.list_wallets().await }, map_result)
     }
 
-    pub fn create_wallet(&self, wallet: String) -> Task<WalletResult<()>> {
+    pub fn create_wallet(&self, wallet: String) -> Task<WalletResult<String>> {
         let client = self.client.clone();
         Task::perform(
             async move {
                 let result = client.wallet_create(&wallet).await;
+                (wallet, result)
+            },
+            map_wallet_result,
+        )
+    }
+
+    pub fn restore_wallet(&self, wallet: String, mnemonic: String) -> Task<WalletResult<()>> {
+        let client = self.client.clone();
+        Task::perform(
+            async move {
+                let result = client.wallet_restore(&wallet, mnemonic).await;
                 (wallet, result)
             },
             map_wallet_result,

@@ -25,7 +25,7 @@ pub enum Message {
     ImportWalletPress,
     ResetBackendPress,
     WalletFileSaved(Result<(), String>),
-    WalletCreated(Result<(), String>),
+    WalletCreated(Result<String, String>),
     WalletFileLoaded(Option<String>),
     WalletFileImported(Result<(), String>),
 }
