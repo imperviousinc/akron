@@ -534,7 +534,7 @@ impl State {
                                         .on_input(move |w| Message::MnemonicWordInput(i, w))
                                 ].align_y(Bottom).spacing(5).into()
                             })
-                    ).spacing(5),
+                    ).spacing(10),
                     horizontal_space(),
                     Column::with_children(
                         mnemonic
@@ -549,11 +549,11 @@ impl State {
                                         .on_input(move |w| Message::MnemonicWordInput(i, w))
                                 ].align_y(Bottom).spacing(5).into()
                             })
-                    ).spacing(5),
+                    ).spacing(10),
                 ].padding([30, 100]).spacing(40),
                 submit_button(
                     text("Continue").width(Fill).align_x(Center),
-                    if mnemonic.iter().all(|word| !word.is_empty()) && self.mnemonic_target.as_ref().map_or(true, |target| target == mnemonic) {
+                    if mnemonic.iter().all(|word| !word.is_empty()) && self.mnemonic_target.as_ref().is_none_or(|target| target == mnemonic) {
                         Some(Message::RestoreWallet)
                     } else {
                         None
@@ -623,7 +623,7 @@ impl State {
                     .align_x(Center)
                     .spacing(30),
                     column![
-                        text_icon(Icon::FolderDown).size(150),
+                        text_icon(Icon::RotateCcwKey).size(150),
                         text("Restore a wallet from a mnemonic").size(20),
                         submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::MnemonicBlank)),
                     ]
