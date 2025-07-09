@@ -307,7 +307,7 @@ impl Client {
         let client = self.client.clone();
         Task::perform(
             async move {
-                let result = client.wallet_restore(&wallet, mnemonic).await;
+                let result = client.wallet_recover(&wallet, mnemonic).await;
                 (wallet, result)
             },
             map_wallet_result,
