@@ -62,6 +62,7 @@ pub struct WalletData {
     pub balance: Option<Amount>,
     pub coin_address: Option<AddressData>,
     pub space_address: Option<AddressData>,
+    pub pending_spaces: Vec<SLabel>,
     pub winning_spaces: Vec<SLabel>,
     pub outbid_spaces: Vec<SLabel>,
     pub owned_spaces: Vec<SLabel>,

@@ -352,6 +352,7 @@ impl State {
                                 })
                                 .collect()
                         };
+                        wallet_state.pending_spaces = spaces.pending;
                         wallet_state.winning_spaces = collect(spaces.winning);
                         wallet_state.outbid_spaces = collect(spaces.outbid);
                         wallet_state.owned_spaces = collect(spaces.owned);
@@ -847,6 +848,7 @@ impl State {
                                         .view(
                                             self.tip_height,
                                             &self.spaces,
+                                            &wallet.state.pending_spaces,
                                             &wallet.state.winning_spaces,
                                             &wallet.state.outbid_spaces,
                                             &wallet.state.owned_spaces,

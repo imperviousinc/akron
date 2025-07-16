@@ -436,12 +436,12 @@ impl State {
         &'a self,
         tip_height: u32,
         spaces: &'a SpacesCollection,
+        pending_spaces: &'a [SLabel],
         winning_spaces: &'a [SLabel],
         outbid_spaces: &'a [SLabel],
         owned_spaces: &'a [SLabel],
     ) -> Element<'a, Message> {
         if let Some(slabel) = self.slabel.as_ref() {
-            let covenant = spaces.get_covenant(slabel);
             container(
                 column![
                     row![
@@ -456,33 +456,44 @@ impl State {
                     .spacing(5)
                     .align_y(Center),
                     horizontal_rule(3),
-                    match covenant {
-                        None => center(text("Loading")).into(),
-                        Some(None) => self.open_view(),
-                        Some(Some(Covenant::Bid {
-                            claim_height,
-                            total_burned,
-                            ..
-                        })) => {
-                            let is_winning = winning_spaces.contains(slabel);
-                            if claim_height.is_some_and(|height| height <= tip_height) {
-                                self.register_view(*total_burned, is_winning)
-                            } else {
-                                self.bid_view(tip_height, *claim_height, *total_burned, is_winning)
+                    if pending_spaces.contains(slabel) {
+                        center(text("There is a pending transaction for this space")).into()
+                    } else {
+                        let covenant = spaces.get_covenant(slabel);
+                        match covenant {
+                            None => center(text("Loading")).into(),
+                            Some(None) => self.open_view(),
+                            Some(Some(Covenant::Bid {
+                                claim_height,
+                                total_burned,
+                                ..
+                            })) => {
+                                let is_winning = winning_spaces.contains(slabel);
+                                if claim_height.is_some_and(|height| height <= tip_height) {
+                                    self.register_view(*total_burned, is_winning)
+                                } else {
+                                    self.bid_view(
+                                        tip_height,
+                                        *claim_height,
+                                        *total_burned,
+                                        is_winning,
+                                    )
+                                }
+                            }
+                            Some(Some(Covenant::Transfer { expire_height, .. })) => {
+                                let is_owned = owned_spaces.contains(slabel);
+                                self.registered_view(
+                                    slabel,
+                                    tip_height,
+                                    *expire_height,
+                                    spaces.get_outpoint(slabel).unwrap(),
+                                    is_owned,
+                                )
+                            }
+                            Some(Some(Covenant::Reserved)) => {
+                                center(text("The space is locked")).into()
                             }
                         }
-                        Some(Some(Covenant::Transfer { expire_height, .. })) => {
-                            let is_owned = owned_spaces.contains(slabel);
-                            self.registered_view(
-                                slabel,
-                                tip_height,
-                                *expire_height,
-                                spaces.get_outpoint(slabel).unwrap(),
-                                is_owned,
-                            )
-                        }
-                        Some(Some(Covenant::Reserved)) =>
-                            center(text("The space is locked")).into(),
                     },
                 ]
                 .padding([20, 0])
