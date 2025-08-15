@@ -1,6 +1,6 @@
 use iced::{
-    widget::{button, center, column, container, horizontal_rule, row, scrollable, text},
-    Bottom, Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme,
+    widget::{button, column, container, horizontal_space, row, scrollable, text, Column},
+    Bottom, Center, Color, Element, Fill, Font, Subscription, Task, Theme,
 };
 use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
@@ -11,9 +11,9 @@ use crate::{
     client::{Client, ClientResult, ServerInfo},
     widget::{
         base::base_container,
-        form::{submit_button, Form},
+        form::{submit_button, text_input, Form},
         icon::{button_icon, text_icon, Icon},
-        text::{error_block, text_big, text_bold, text_semibold, text_small},
+        text::{error_block, text_big, text_bold, text_monospace, text_semibold, text_small},
     },
     Config, ConfigBackend,
 };
@@ -24,6 +24,8 @@ pub struct State {
     client: Option<Client>,
     connecting: bool,
     logs: ConstGenericRingBuffer<String, 100>,
+    mnemonic: Option<[String; 12]>,
+    mnemonic_target: Option<[String; 12]>,
     error: Option<String>,
 }
 
@@ -32,7 +34,6 @@ pub enum Message {
     BackendSet(ConfigBackend),
     NetworkSelect(ExtendedNetwork),
     UrlInput(String),
-    CookieInput(String),
     UserInput(String),
     PasswordInput(String),
     Connect,
@@ -41,7 +42,11 @@ pub enum Message {
     ListWalletsResult(ClientResult<Vec<String>>),
     Reset,
     Disconnect,
+    MnemonicClear,
+    MnemonicBlank,
+    MnemonicWordInput(usize, String),
     CreateWallet,
+    RestoreWallet,
     ImportWallet,
     ImportWalletPicked(Result<String, String>),
     SetWalletResult(Result<String, String>),
@@ -72,6 +77,8 @@ impl State {
                 client: None,
                 connecting: false,
                 logs: Default::default(),
+                mnemonic: None,
+                mnemonic_target: None,
                 error: None,
             },
             task,
@@ -107,16 +114,10 @@ impl State {
                 }
                 Action::none()
             }
-            Message::CookieInput(value) => {
-                match self.config.backend.as_mut() {
-                    Some(ConfigBackend::Bitcoind { cookie, .. }) => *cookie = value,
-                    _ => unreachable!(),
-                }
-                Action::none()
-            }
             Message::UserInput(value) => {
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { user, .. }) => *user = value,
+                    Some(ConfigBackend::Spaced { user, .. }) => *user = value,
                     _ => unreachable!(),
                 }
                 Action::none()
@@ -124,6 +125,7 @@ impl State {
             Message::PasswordInput(value) => {
                 match self.config.backend.as_mut() {
                     Some(ConfigBackend::Bitcoind { password, .. }) => *password = value,
+                    Some(ConfigBackend::Spaced { password, .. }) => *password = value,
                     _ => unreachable!(),
                 }
                 Action::none()
@@ -132,6 +134,7 @@ impl State {
                 if self.connecting {
                     return Action::none();
                 }
+                self.logs.clear();
                 self.connecting = true;
                 let data_dir = self.config.data_dir().to_path_buf();
                 let backend_config = self.config.backend.clone().unwrap();
@@ -207,13 +210,9 @@ impl State {
                 Action::Task(
                     Task::future(tokio::time::sleep(std::time::Duration::from_secs(1)))
                         .discard()
-                        .chain(
-                            self.client
-                                .as_ref()
-                                .unwrap()
-                                .get_server_info()
-                                .map(Message::GetServerInfoResult),
-                        ),
+                        .chain(self.client.as_ref().map_or(Task::none(), |client| {
+                            client.get_server_info().map(Message::GetServerInfoResult)
+                        })),
                 )
             }
             Message::ListWalletsResult(result) => match result {
@@ -243,17 +242,55 @@ impl State {
                 Action::none()
             }
             Message::Disconnect => {
-                if self.connecting {
-                    return Action::none();
-                }
+                self.connecting = false;
                 self.client = None;
                 Action::none()
             }
-            Message::CreateWallet => Action::Task(
+            Message::MnemonicClear => {
+                self.mnemonic = None;
+                self.mnemonic_target = None;
+                Action::none()
+            }
+            Message::MnemonicBlank => {
+                self.mnemonic = Some(Default::default());
+                Action::none()
+            }
+            Message::MnemonicWordInput(i, word) => {
+                if word.chars().all(|c| c.is_ascii_lowercase()) {
+                    self.mnemonic.as_mut().unwrap()[i] = word;
+                }
+                Action::none()
+            }
+            Message::CreateWallet => {
+                use spaces_wallet::bdk_wallet::{
+                    keys::{
+                        bip39::{Language, Mnemonic, WordCount},
+                        GeneratableKey, GeneratedKey,
+                    },
+                    miniscript::Tap,
+                };
+                let mnemonic: GeneratedKey<_, Tap> =
+                    Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+                self.mnemonic_target = Some(
+                    mnemonic
+                        .to_string()
+                        .split(' ')
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap(),
+                );
+                self.mnemonic = None;
+                Action::none()
+            }
+            Message::RestoreWallet => Action::Task(
                 self.client
                     .as_ref()
                     .unwrap()
-                    .create_wallet("default".to_string())
+                    .restore_wallet(
+                        "default".to_string(),
+                        self.mnemonic.as_ref().unwrap().join(" "),
+                    )
                     .map(|r| Message::SetWalletResult(r.result.map(|_| r.label))),
             ),
             Message::ImportWallet => Action::Task(Task::perform(
@@ -318,6 +355,7 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Akrond {
                                 network: ExtendedNetwork::Mainnet,
                                 prune_point: None,
+                                spaced_password: None,
                             }))
                         ),
                     ]
@@ -333,9 +371,9 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Bitcoind {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:8332".to_string(),
-                                cookie: String::new(),
                                 user: String::new(),
                                 password: String::new(),
+                                spaced_password: None,
                             }))
                         ).style(|theme: &Theme, status: button::Status| {
                             let mut style = button::secondary(theme, status);
@@ -355,6 +393,8 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Spaced {
                                 network: ExtendedNetwork::Mainnet,
                                 url: "http://127.0.0.1:7225".to_string(),
+                                user: String::new(),
+                                password: String::new(),
                             }))
                         ).style(|theme: &Theme, status: button::Status| {
                             let mut style = button::secondary(theme, status);
@@ -369,8 +409,13 @@ impl State {
             .spacing(10)
         } else if self.connecting {
             column![
-                center(text_semibold("Please wait... This may take a few minutes.").size(16)).padding([10, 0]).height(Shrink),
-                horizontal_rule(3.0),
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::Disconnect),
+                    text_big("Connecting"),
+                ]
+                .align_y(Center),
                 container(
                     scrollable(column(
                         self.logs
@@ -408,21 +453,19 @@ impl State {
                         ExtendedNetwork::Regtest,
                     ];
                     match self.config.backend.as_ref().unwrap() {
-                        ConfigBackend::Akrond { network, .. } => {
-                            base_container(
+                        ConfigBackend::Akrond { network, .. } => base_container(
                             Form::new("Connect", Some(Message::Connect)).add_pick_list(
                                 "Chain",
                                 [ExtendedNetwork::Mainnet, ExtendedNetwork::Testnet4],
                                 Some(network),
                                 Message::NetworkSelect,
-                            ))
-                        }
+                            )),
                         ConfigBackend::Bitcoind {
                             network,
                             url,
-                            cookie,
                             user,
                             password,
+                            spaced_password: _,
                         } => base_container(Form::new("Connect", Some(Message::Connect))
                             .add_text_input(
                                 "Bitcoind JSON-RPC URL",
@@ -430,7 +473,6 @@ impl State {
                                 url,
                                 Message::UrlInput,
                             )
-                            .add_text_input("Auth cookie", "none", cookie, Message::CookieInput)
                             .add_text_input("User login", "none", user, Message::UserInput)
                             .add_text_input(
                                 "User password",
@@ -444,23 +486,126 @@ impl State {
                                 Some(network),
                                 Message::NetworkSelect,
                             )),
-                        ConfigBackend::Spaced { network, url } => {
-                            base_container(Form::new("Connect", Some(Message::Connect))
-                                .add_text_input(
-                                    "Spaced JSON-RPC URL",
-                                    "http://127.0.0.1:8332",
-                                    url,
-                                    Message::UrlInput,
-                                )
-                                .add_pick_list(
-                                    "Chain",
-                                    networks,
-                                    Some(network),
-                                    Message::NetworkSelect,
-                                ))
-                        }
+                        ConfigBackend::Spaced {
+                            network,
+                            url,
+                            user,
+                            password,
+                        } => base_container(Form::new("Connect", Some(Message::Connect))
+                            .add_text_input(
+                                "Spaced JSON-RPC URL",
+                                "http://127.0.0.1:8332",
+                                url,
+                                Message::UrlInput,
+                            )
+                            .add_text_input("User login", "none", user, Message::UserInput)
+                            .add_text_input(
+                                "User password",
+                                "none",
+                                password,
+                                Message::PasswordInput,
+                            )
+                            .add_pick_list(
+                                "Chain",
+                                networks,
+                                Some(network),
+                                Message::NetworkSelect,
+                            ))
                     }
                 },
+            ]
+            .spacing(10)
+        } else if let Some(mnemonic) = self.mnemonic.as_ref() {
+            column![
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::MnemonicClear),
+                    text_big("Enter the mnemonic phrase"),
+                ]
+                .align_y(Center),
+                error_block(self.error.as_ref()),
+                row![
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_input("", word)
+                                        .on_input(move |w| Message::MnemonicWordInput(i, w))
+                                ].align_y(Center).spacing(5).into()
+                            })
+                    ).spacing(10),
+                    horizontal_space(),
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .skip(1)
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    text_input("", word)
+                                        .on_input(move |w| Message::MnemonicWordInput(i, w))
+                                ].align_y(Center).spacing(5).into()
+                            })
+                    ).spacing(10),
+                ].padding([30, 100]).spacing(40),
+                submit_button(
+                    text("Continue").width(Fill).align_x(Center),
+                    if mnemonic.iter().all(|word| !word.is_empty()) && self.mnemonic_target.as_ref().is_none_or(|target| target == mnemonic) {
+                        Some(Message::RestoreWallet)
+                    } else {
+                        None
+                    }
+                ),
+            ]
+            .spacing(10)
+        } else if let Some(mnemonic) = self.mnemonic_target.as_ref() {
+            column![
+                row![
+                    button_icon(Icon::ChevronLeft)
+                        .style(button::text)
+                        .on_press(Message::MnemonicClear),
+                    text_big("Write down the mnemonic phrase"),
+                ]
+                .align_y(Center),
+                row![
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    container(text_semibold(word).size(30)).padding([12, 0]),
+                                ].align_y(Center).spacing(5).into()
+                            })
+                    ).spacing(10),
+                    horizontal_space(),
+                    Column::with_children(
+                        mnemonic
+                            .iter()
+                            .enumerate()
+                            .skip(1)
+                            .step_by(2)
+                            .map(|(i, word)| {
+                                row![
+                                    text_monospace(format!("{:02}.", i + 1)).size(30),
+                                    container(text_semibold(word).size(30)).padding([12, 0]),
+                                ].align_y(Center).spacing(5).into()
+                            })
+                    ).spacing(10),
+                ].padding([30, 100]).spacing(40),
+                submit_button(
+                    text("Continue").width(Fill).align_x(Center),
+                    Some(Message::MnemonicBlank),
+                ),
             ]
             .spacing(10)
         } else {
@@ -476,20 +621,26 @@ impl State {
                 row![
                     column![
                         text_icon(Icon::WalletMinimal).size(150),
-                        text_semibold("Create a new spaces wallet").size(20),
+                        text("Create a new spaces wallet").size(20),
                         submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::CreateWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
                     column![
+                        text_icon(Icon::RotateCcwKey).size(150),
+                        text("Restore a wallet from a mnemonic").size(20),
+                        submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::MnemonicBlank)),
+                    ]
+                    .align_x(Center)
+                    .spacing(30),
+                    column![
                         text_icon(Icon::FolderDown).size(150),
-                        text_semibold("Load an existing spaces wallet").size(20),
+                        text("Load an existing spaces wallet").size(20),
                         submit_button(text("Continue").align_x(Center).width(Fill), Some(Message::ImportWallet)),
                     ]
                     .align_x(Center)
                     .spacing(30),
-                ].align_y(Bottom)
-                .spacing(140).padding([0, 140]),
+                ].align_y(Bottom).padding([0, 80]).spacing(80)
             ]
             .spacing(10)
         })

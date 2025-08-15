@@ -4613,7 +4613,7 @@ dependencies = [
 [[package]]
 name = "spaces_client"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#646c3126f3fdca59ec6793db4b4e5eb164436608"
+source = "git+https://github.com/spacesprotocol/spaces.git#f243ad08ccde82a4d0729ed18c41ad713a5f8de5"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4626,8 +4626,10 @@ dependencies = [
  "env_logger",
  "futures",
  "hex",
+ "hyper 0.14.32",
  "jsonrpsee",
  "log",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
@@ -4643,7 +4645,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#646c3126f3fdca59ec6793db4b4e5eb164436608"
+source = "git+https://github.com/spacesprotocol/spaces.git#f243ad08ccde82a4d0729ed18c41ad713a5f8de5"
 dependencies = [
  "bincode",
  "bitcoin",
@@ -4654,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "spaces_wallet"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git#646c3126f3fdca59ec6793db4b4e5eb164436608"
+source = "git+https://github.com/spacesprotocol/spaces.git#f243ad08ccde82a4d0729ed18c41ad713a5f8de5"
 dependencies = [
  "anyhow",
  "bdk_wallet",
