@@ -17,12 +17,14 @@ pub enum ConfigBackend {
     Akrond {
         network: ExtendedNetwork,
         prune_point: Option<spaces_protocol::constants::ChainAnchor>,
+        spaced_password: Option<String>,
     },
     Bitcoind {
         network: ExtendedNetwork,
         url: String,
         user: String,
         password: String,
+        spaced_password: Option<String>,
     },
     Spaced {
         network: ExtendedNetwork,

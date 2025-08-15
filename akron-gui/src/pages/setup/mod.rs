@@ -355,6 +355,7 @@ impl State {
                             Some(Message::BackendSet(ConfigBackend::Akrond {
                                 network: ExtendedNetwork::Mainnet,
                                 prune_point: None,
+                                spaced_password: None,
                             }))
                         ),
                     ]
@@ -372,6 +373,7 @@ impl State {
                                 url: "http://127.0.0.1:8332".to_string(),
                                 user: String::new(),
                                 password: String::new(),
+                                spaced_password: None,
                             }))
                         ).style(|theme: &Theme, status: button::Status| {
                             let mut style = button::secondary(theme, status);
@@ -463,6 +465,7 @@ impl State {
                             url,
                             user,
                             password,
+                            spaced_password: _,
                         } => base_container(Form::new("Connect", Some(Message::Connect))
                             .add_text_input(
                                 "Bitcoind JSON-RPC URL",

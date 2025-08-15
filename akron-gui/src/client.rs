@@ -87,6 +87,7 @@ impl Client {
             ConfigBackend::Akrond {
                 network,
                 prune_point,
+                spaced_password,
             } => {
                 let (akron, shutdown) = Akron::create(CAPTURE_LOGS);
                 logs = akron.subscribe_logs();
@@ -101,7 +102,10 @@ impl Client {
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
-                let password = random_password();
+                if spaced_password.is_none() {
+                    *spaced_password = Some(random_password());
+                };
+                let password = spaced_password.as_ref().unwrap().to_string();
                 let spaces_args: Vec<String> = [
                     "--chain",
                     &network.to_string(),
@@ -194,12 +198,16 @@ impl Client {
                 url,
                 user,
                 password,
+                spaced_password,
             } => {
                 let (akron, shutdown) = Akron::create(CAPTURE_LOGS);
                 logs = akron.subscribe_logs();
                 let spaces_data_dir = data_dir.join("spaces");
                 let network_string = network.to_string();
-                let spaces_password = random_password();
+                if spaced_password.is_none() {
+                    *spaced_password = Some(random_password());
+                };
+                let spaces_password = spaced_password.as_ref().unwrap().to_string();
                 let mut spaces_args = vec![
                     "--chain",
                     &network_string,
