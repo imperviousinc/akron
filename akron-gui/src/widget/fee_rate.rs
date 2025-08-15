@@ -216,7 +216,7 @@ impl FeeRateSelector {
         }
     }
 
-    pub fn view(&self) -> Element<FeeRateMessage> {
+    pub fn view(&self) -> Element<'_, FeeRateMessage> {
         if self.show_modal {
             let mut fee_content = column![text("Fee rate").size(20)].padding(20).spacing(10);
 

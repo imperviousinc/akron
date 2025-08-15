@@ -88,7 +88,7 @@ impl State {
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         match self {
             Self::Setup(state) => state.view().map(Message::Setup),
             Self::Main(state) => state.view().map(Message::Main),

@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "akron-gui"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "akrond",
  "directories 5.0.1",
@@ -80,7 +80,7 @@ dependencies = [
 
 [[package]]
 name = "akrond"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "directories 6.0.0",

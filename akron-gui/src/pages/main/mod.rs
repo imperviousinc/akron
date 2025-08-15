@@ -710,7 +710,7 @@ impl State {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let content = self.main_view();
         stack![
             content,
@@ -719,7 +719,7 @@ impl State {
         .into()
     }
 
-    pub fn main_view(&self) -> Element<Message> {
+    pub fn main_view(&self) -> Element<'_, Message> {
         let navbar_button = |label, icon: Icon, route: Route, screen: Screen| {
             let button = button(
                 row![
@@ -890,7 +890,7 @@ impl State {
             .into()
     }
 
-    pub fn logs_view(&self) -> Option<Element<Message>> {
+    pub fn logs_view(&self) -> Option<Element<'_, Message>> {
         if self.log_buffer.is_empty() {
             return None;
         }
