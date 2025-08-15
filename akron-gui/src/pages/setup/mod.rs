@@ -91,7 +91,9 @@ impl State {
     }
 
     pub fn update(&mut self, message: Message) -> Action {
-        self.error = None;
+        if !matches!(message, Message::LogReceived(..)) {
+            self.error = None;
+        }
         match message {
             Message::BackendSet(value) => {
                 self.config.backend = Some(value);
@@ -177,18 +179,19 @@ impl State {
                                 }
                             }
                         }
-                        if server_info.chain.headers
-                            >= (match backend_config {
-                                ConfigBackend::Akrond { prune_point, .. } => {
-                                    prune_point.map_or(0, |p| p.height)
-                                }
-                                ConfigBackend::Bitcoind { network, .. }
-                                | ConfigBackend::Spaced { network, .. } => match network {
-                                    ExtendedNetwork::Mainnet => ChainAnchor::MAINNET().height,
-                                    ExtendedNetwork::Testnet4 => ChainAnchor::TESTNET4().height,
-                                    _ => 0,
-                                },
-                            })
+                        if server_info.ready
+                            && server_info.chain.headers
+                                >= (match backend_config {
+                                    ConfigBackend::Akrond { prune_point, .. } => {
+                                        prune_point.map_or(0, |p| p.height)
+                                    }
+                                    ConfigBackend::Bitcoind { network, .. }
+                                    | ConfigBackend::Spaced { network, .. } => match network {
+                                        ExtendedNetwork::Mainnet => ChainAnchor::MAINNET().height,
+                                        ExtendedNetwork::Testnet4 => ChainAnchor::TESTNET4().height,
+                                        _ => 0,
+                                    },
+                                })
                         {
                             return if self.config.wallet.is_none() {
                                 Action::Task(

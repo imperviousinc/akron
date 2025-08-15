@@ -137,7 +137,7 @@ impl State {
     pub fn view<'a>(
         &'a self,
         tip_height: u32,
-        balance: Amount,
+        balance: Option<Amount>,
         transactions: &'a [TxInfo],
     ) -> Element<'a, Message> {
         if let Some(txid) = self.txid.as_ref() {
@@ -366,7 +366,7 @@ impl State {
             column![
                 column![
                     text_big("Balance").size(22),
-                    text_big(format_amount(balance))
+                    text_big(balance.map_or("--".to_string(), format_amount))
                         .style(|t: &Theme| {
                             let mut style = text::primary(t);
                             let p = t.extended_palette();
