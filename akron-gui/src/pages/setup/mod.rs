@@ -341,7 +341,7 @@ impl State {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         const DESCRIPTION_TEXT_HEIGHT: u16 = 100;
 
         container(if self.config.backend.is_none() {

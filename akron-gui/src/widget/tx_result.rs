@@ -24,7 +24,7 @@ impl TxResultWidget {
         // No state changes needed
     }
 
-    pub fn view(&self) -> Element<TxListMessage> {
+    pub fn view(&self) -> Element<'_, TxListMessage> {
         let content = if self.transactions.is_empty() {
             Column::new().push(text("No transactions").color(Color::from_rgb8(77, 77, 77)))
         } else {
