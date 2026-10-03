@@ -33,12 +33,24 @@ pub enum Filter {
     Bidding,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum OperatorKind {
+    NotOperated,
+    Operated,
+    Delegated { num_id: String },
+}
+
 #[derive(Debug, Default)]
 pub struct State {
     slabel: Option<SLabel>,
     search: String,
     filter: Filter,
     amount: String,
+    delegate_to: String,
+    redelegate_confirm: bool,
+    revoke_confirm: bool,
+    lookup: Option<SLabel>,
+    operator: Option<OperatorQuery>,
     error: Option<String>,
     tx_result: Option<TxResultWidget>,
 }
@@ -57,6 +69,14 @@ pub enum Message {
     BidSubmit,
     RegisterSubmit,
     RenewSubmit,
+    OperateSubmit,
+    RevokeAsk,
+    RevokeCancel,
+    DelegateRecipientInput(String),
+    RedelegateAsk,
+    RedelegateCancel,
+    DelegateSubmit,
+    OperatorStatus(OperatorQuery),
     ClientResult(Result<WalletResponse, String>),
     TxResult(TxListMessage),
 }
@@ -70,25 +90,37 @@ pub enum Action {
     BidSpace { slabel: SLabel, amount: Amount },
     RegisterSpace { slabel: SLabel },
     RenewSpace { slabel: SLabel },
+    OperateSpace { slabel: SLabel },
+    DelegateSpace { slabel: SLabel, to: String },
     ShowTransactions,
 }
 
 impl State {
     pub fn reset_inputs(&mut self) {
         self.amount = Default::default();
+        self.delegate_to = Default::default();
+        self.redelegate_confirm = false;
+        self.revoke_confirm = false;
+    }
+
+    fn clear_operator(&mut self) {
+        self.operator = None;
     }
 
     pub fn reset(&mut self) {
         self.reset_inputs();
+        self.clear_operator();
         if self.slabel.is_some() {
             self.slabel = Default::default();
         } else {
             self.search = Default::default();
+            self.lookup = None;
         }
     }
 
     pub fn set_slabel(&mut self, slabel: &SLabel) {
         self.reset_inputs();
+        self.clear_operator();
         self.slabel = Some(slabel.clone())
     }
 
@@ -97,15 +129,23 @@ impl State {
     }
 
     pub fn update(&mut self, message: Message) -> Action {
-        self.error = None;
-        self.tx_result = None;
+        if !matches!(message, Message::OperatorStatus(_)) {
+            self.error = None;
+            self.tx_result = None;
+        }
 
         match message {
             Message::BackPress => {
                 self.slabel = None;
+                self.clear_operator();
+                self.redelegate_confirm = false;
+                self.revoke_confirm = false;
                 Action::None
             }
             Message::SLabelPress(slabel) => {
+                self.clear_operator();
+                self.redelegate_confirm = false;
+                self.revoke_confirm = false;
                 self.slabel = Some(slabel.clone());
                 Action::GetSpaceInfo { slabel }
             }
@@ -116,8 +156,10 @@ impl State {
                 if is_slabel_input(&search) {
                     self.search = search;
                     if let Some(slabel) = slabel_from_str(&self.search) {
+                        self.lookup = Some(slabel.clone());
                         Action::GetSpaceInfo { slabel }
                     } else {
+                        self.lookup = None;
                         Action::None
                     }
                 } else {
@@ -150,6 +192,42 @@ impl State {
             Message::RenewSubmit => Action::RenewSpace {
                 slabel: self.slabel.as_ref().unwrap().clone(),
             },
+            Message::OperateSubmit => Action::OperateSpace {
+                slabel: self.slabel.as_ref().unwrap().clone(),
+            },
+            Message::RevokeAsk => {
+                self.revoke_confirm = true;
+                Action::None
+            }
+            Message::RevokeCancel => {
+                self.revoke_confirm = false;
+                Action::None
+            }
+            Message::DelegateRecipientInput(recipient) => {
+                if is_delegate_recipient_input(&recipient) {
+                    self.delegate_to = recipient;
+                    self.redelegate_confirm = false;
+                }
+                Action::None
+            }
+            Message::RedelegateAsk => {
+                self.redelegate_confirm = true;
+                Action::None
+            }
+            Message::RedelegateCancel => {
+                self.redelegate_confirm = false;
+                Action::None
+            }
+            Message::DelegateSubmit => Action::DelegateSpace {
+                slabel: self.slabel.as_ref().unwrap().clone(),
+                to: delegate_recipient_from_str(&self.delegate_to).unwrap(),
+            },
+            Message::OperatorStatus(query) => {
+                if self.slabel.as_ref() == Some(&query.slabel) {
+                    self.operator = Some(query);
+                }
+                Action::None
+            }
             Message::ClientResult(Ok(w)) => {
                 if w.result.iter().any(|r| r.error.is_some()) {
                     self.tx_result = Some(TxResultWidget::new(w));
@@ -191,6 +269,152 @@ impl State {
 
     fn renew_form(&self) -> Element<'_, Message> {
         Form::new("Renew", Some(Message::RenewSubmit)).into()
+    }
+
+    fn operator_kind(&self, space_script: Option<&[u8]>) -> Option<OperatorKind> {
+        let query = self.operator.as_ref()?;
+        if query.error.is_some() {
+            return None;
+        }
+        let Some(num_script) = query.num_script.as_deref() else {
+            return Some(OperatorKind::NotOperated);
+        };
+        let space_script = space_script?;
+        if num_script == space_script {
+            Some(OperatorKind::Operated)
+        } else {
+            Some(OperatorKind::Delegated {
+                num_id: query.num_id.clone().unwrap_or_default(),
+            })
+        }
+    }
+
+    fn operator_status_line(&self, space_script: Option<&[u8]>) -> String {
+        let can_operate = self.operator.as_ref().is_some_and(|q| q.can_operate);
+        match self.operator_kind(space_script) {
+            None if self.operator.as_ref().is_some_and(|q| q.error.is_some()) => String::new(),
+            None => "Loading operator status".to_string(),
+            Some(OperatorKind::NotOperated) => "Not operated".to_string(),
+            Some(OperatorKind::Operated) if can_operate => "You operate this space".to_string(),
+            Some(OperatorKind::Operated) => "Operated".to_string(),
+            Some(OperatorKind::Delegated { num_id }) => format!("Delegated ({num_id})"),
+        }
+    }
+
+    fn operate_form(&self, space_script: Option<&[u8]>) -> Element<'_, Message> {
+        let replaces_operator = matches!(
+            self.operator_kind(space_script),
+            Some(OperatorKind::Operated | OperatorKind::Delegated { .. })
+        );
+        let helper = if replaces_operator {
+            "This space already has an operator."
+        } else {
+            "Moves this space to a new address in this wallet and creates the operator num."
+        };
+        column![
+            text_small(helper),
+            Form::new(
+                "Operate",
+                (!replaces_operator).then_some(Message::OperateSubmit),
+            ),
+        ]
+        .spacing(10)
+        .into()
+    }
+
+    fn delegate_form(&self, space_script: Option<&[u8]>) -> Element<'_, Message> {
+        let redelegate = matches!(
+            self.operator_kind(space_script),
+            Some(OperatorKind::Delegated { .. })
+        );
+        let recipient = delegate_recipient_from_str(&self.delegate_to);
+        let submit = if recipient.is_none() || self.redelegate_confirm {
+            None
+        } else if redelegate {
+            Some(Message::RedelegateAsk)
+        } else {
+            Some(Message::DelegateSubmit)
+        };
+        column![text_small(
+            "Sends the operator num. The space stays where it is."
+        )]
+        .push_maybe(redelegate.then(|| {
+            text_small("Redelegation disrupts service until the recipient operator is functional.")
+                .style(iced::widget::text::danger)
+        }))
+        .push(
+            Form::new(if redelegate { "Redelegate" } else { "Delegate" }, submit).add_text_input(
+                "To",
+                "space address or @space",
+                &self.delegate_to,
+                Message::DelegateRecipientInput,
+            ),
+        )
+        .push_maybe(self.redelegate_confirm.then(|| {
+            column![
+                text_small(format!(
+                    "Confirm redelegation to {}?",
+                    recipient.unwrap_or_default()
+                )),
+                row![
+                    button(text("Confirm").width(Fill).align_x(Center))
+                        .on_press(Message::DelegateSubmit)
+                        .padding(STANDARD_PADDING)
+                        .width(Fill)
+                        .style(button::primary),
+                    button(text("Cancel").width(Fill).align_x(Center))
+                        .on_press(Message::RedelegateCancel)
+                        .padding(STANDARD_PADDING)
+                        .width(Fill)
+                        .style(button::secondary),
+                ]
+                .spacing(10),
+            ]
+            .spacing(10)
+        }))
+        .spacing(10)
+        .into()
+    }
+
+    fn revoke_form(&self, space_script: Option<&[u8]>) -> Element<'_, Message> {
+        let operated = matches!(
+            self.operator_kind(space_script),
+            Some(OperatorKind::Operated | OperatorKind::Delegated { .. })
+        );
+        column![text_small(
+            "Spends the space, moves it to a new address in this wallet, and replaces the operator. This revokes the current operator."
+        )]
+        .push_maybe(operated.then(|| {
+            text_small(
+                "Revoking operation disrupts service until the new operator in this wallet is functional.",
+            )
+            .style(iced::widget::text::danger)
+        }))
+        .push(Form::new(
+            "Revoke Operation",
+            (operated && !self.revoke_confirm).then_some(Message::RevokeAsk),
+        ))
+        .push_maybe(self.revoke_confirm.then(|| {
+            column![
+                text_small("Confirm revoke operation?"),
+                row![
+                    button(text("Confirm").width(Fill).align_x(Center))
+                        .on_press(Message::OperateSubmit)
+                        .padding(STANDARD_PADDING)
+                        .width(Fill)
+                        .style(button::primary),
+                    button(text("Cancel").width(Fill).align_x(Center))
+                        .on_press(Message::RevokeCancel)
+                        .padding(STANDARD_PADDING)
+                        .width(Fill)
+                        .style(button::secondary),
+                ]
+                .spacing(10),
+            ]
+            .spacing(10)
+        }))
+        .spacing(10)
+        .into()
     }
 
     fn open_view(&self) -> Element<'_, Message> {
@@ -295,6 +519,7 @@ impl State {
         expire_height: u32,
         owner: (&'a OutPoint, &'a Option<XOnlyPublicKey>),
         is_owned: bool,
+        space_script: Option<&'a [u8]>,
     ) -> Element<'a, Message> {
         let (outpoint, pubkey) = owner;
         base_container(
@@ -410,20 +635,40 @@ impl State {
                     }
                 })
                 .padding(40),
-                if is_owned {
+                if is_owned || self.operator.is_some() {
+                    let can_delegate = self.operator.as_ref().is_some_and(|q| q.can_operate);
+                    let delegated = matches!(
+                        self.operator_kind(space_script),
+                        Some(OperatorKind::Delegated { .. })
+                    );
                     column![
                         text_big("Actions"),
-                        error_block(self.error.as_ref()),
+                        text_small(self.operator_status_line(space_script)),
+                        error_block(self.error.as_ref().or_else(|| {
+                            self.operator
+                                .as_ref()
+                                .and_then(|query| query.error.as_ref())
+                        })),
                         if let Some(tx_widget) = &self.tx_result {
                             tx_widget.view().map(Message::TxResult)
                         } else {
                             text("").into()
                         },
-                        self.renew_form(),
                     ]
+                    .push_maybe(is_owned.then(|| self.renew_form()))
+                    .push_maybe(is_owned.then(|| self.operate_form(space_script)))
+                    .push_maybe(
+                        (can_delegate || (is_owned && delegated))
+                            .then(|| self.delegate_form(space_script)),
+                    )
+                    .push(self.revoke_form(space_script))
                     .spacing(10)
                 } else {
-                    column![]
+                    column![
+                        text_small(self.operator_status_line(space_script)),
+                        self.revoke_form(space_script),
+                    ]
+                    .spacing(10)
                 }
                 .width(Fill)
             ]
@@ -488,6 +733,7 @@ impl State {
                                     *expire_height,
                                     spaces.get_outpoint(slabel).unwrap(),
                                     is_owned,
+                                    spaces.get_script_pubkey(slabel),
                                 )
                             }
                             Some(Some(Covenant::Reserved)) => {
@@ -506,12 +752,20 @@ impl State {
                     Filter::Bidding => winning_spaces.iter().chain(outbid_spaces).collect(),
                 }
             } else {
-                owned_spaces
+                let mut found: Vec<&SLabel> = owned_spaces
                     .iter()
                     .chain(winning_spaces.iter())
                     .chain(outbid_spaces.iter())
                     .filter(|s| s.as_str_unprefixed().unwrap().contains(&self.search))
-                    .collect()
+                    .collect();
+                if let Some(lookup) = self.lookup.as_ref() {
+                    if lookup.as_str_unprefixed().unwrap() == self.search
+                        && !found.iter().any(|s| *s == lookup)
+                    {
+                        found.push(lookup);
+                    }
+                }
+                found
             };
             slabels.sort_unstable_by_key(|s| s.as_str_unprefixed().unwrap());
 

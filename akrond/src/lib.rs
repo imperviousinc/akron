@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context};
 use log::{error, info};
 use reqwest::Client;
 use spaces_client::jsonrpsee::core::__reexports::serde_json;
-use spaces_client::rpc::RootAnchor;
+use spaces_nums::RootAnchor;
 use std::env;
 use std::env::temp_dir;
 use std::path::PathBuf;
@@ -152,7 +152,7 @@ impl Akron {
         file.flush().await.context("Failed to flush file")?;
         let root_anchor = tokio::task::spawn_blocking(move || {
             let tmp = temp_dir().join("anchors");
-            let db = spaces_client::store::Store::open(spaces_path)?;
+            let db = spaces_client::store::spaces::SpStore::open(spaces_path, false, None)?;
             let mut anchors = db.update_anchors(&tmp, 1)?;
             if anchors.is_empty() {
                 return Err(anyhow::anyhow!("No Anchors found"));

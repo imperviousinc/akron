@@ -10,6 +10,7 @@ edition = "2021"
 lto = true
 
 [workspace.dependencies]
-spaces_client = { git = "https://github.com/spacesprotocol/spaces.git" }
-spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git" }
-spaces_wallet = { git = "https://github.com/spacesprotocol/spaces.git" }
+spaces_client = { path = "../spaced-spacesops/client" }
+spaces_protocol = { path = "../spaced-spacesops/protocol" }
+spaces_wallet = { path = "../spaced-spacesops/wallet" }
+spaces_nums = { path = "../spaced-spacesops/nums" }

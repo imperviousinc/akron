@@ -6,8 +6,8 @@ use spaces_client::{
     config::default_spaces_rpc_port,
     config::ExtendedNetwork,
     rpc::{
-        BidParams, OpenParams, RegisterParams, RpcClient, RpcWalletRequest, RpcWalletTxBuilder,
-        SendCoinsParams, TransferSpacesParams,
+        BidParams, DelegateParams, OpenParams, OperateParams, RegisterParams, RpcClient,
+        RpcWalletRequest, RpcWalletTxBuilder, SendCoinsParams, TransferSpacesParams,
     },
 };
 use spaces_protocol::constants::ChainAnchor;
@@ -26,8 +26,30 @@ pub use spaces_wallet::{
         BidEventDetails, BidoutEventDetails, OpenEventDetails, SendEventDetails, TxEvent,
         TxEventKind,
     },
-    Balance, Listing,
+    Balance, Listing, Subject,
 };
+
+#[derive(Debug, Clone)]
+pub struct OperatorQuery {
+    pub slabel: SLabel,
+    pub num_id: Option<String>,
+    pub num_script: Option<Vec<u8>>,
+    pub can_operate: bool,
+    pub error: Option<String>,
+}
+
+fn wallet_tx(requests: Vec<RpcWalletRequest>, fee_rate: Option<FeeRate>) -> RpcWalletTxBuilder {
+    RpcWalletTxBuilder {
+        bidouts: None,
+        requests,
+        fee_rate,
+        dust: None,
+        force: false,
+        confirmed_only: false,
+        skip_tx_check: false,
+        dry_run: false,
+    }
+}
 
 use akrond::{runner::ServiceKind, Akron};
 
@@ -43,11 +65,15 @@ pub struct Client {
 
 pub type ClientResult<T> = Result<T, String>;
 
-fn map_result<T>(result: Result<T, ClientError>) -> ClientResult<T> {
-    result.map_err(|e| match e {
+fn map_client_error(error: ClientError) -> String {
+    match error {
         ClientError::Call(e) => e.message().to_string(),
-        _ => e.to_string(),
-    })
+        _ => error.to_string(),
+    }
+}
+
+fn map_result<T>(result: Result<T, ClientError>) -> ClientResult<T> {
+    result.map_err(map_client_error)
 }
 
 #[derive(Debug, Clone)]
@@ -438,18 +464,13 @@ impl Client {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::SendCoins(SendCoinsParams {
+                        wallet_tx(
+                            vec![RpcWalletRequest::SendCoins(SendCoinsParams {
                                 amount,
                                 to: recipient,
                             })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
@@ -473,15 +494,10 @@ impl Client {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::Open(OpenParams { name, amount })],
+                        wallet_tx(
+                            vec![RpcWalletRequest::Open(OpenParams { name, amount })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
@@ -505,15 +521,10 @@ impl Client {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::Bid(BidParams { name, amount })],
+                        wallet_tx(
+                            vec![RpcWalletRequest::Bid(BidParams { name, amount })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
@@ -535,18 +546,13 @@ impl Client {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::Register(RegisterParams {
+                        wallet_tx(
+                            vec![RpcWalletRequest::Register(RegisterParams {
                                 name,
                                 to: None,
                             })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
@@ -561,25 +567,21 @@ impl Client {
         slabel: SLabel,
         fee_rate: Option<FeeRate>,
     ) -> Task<WalletResult<WalletResponse>> {
-        let name = slabel.to_string();
         let client = self.client.clone();
         Task::perform(
             async move {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::Transfer(TransferSpacesParams {
-                                spaces: vec![name],
+                        wallet_tx(
+                            vec![RpcWalletRequest::Transfer(TransferSpacesParams {
+                                spaces: vec![Subject::Label(slabel)],
                                 to: None,
+                                data: None,
+                                secret: None,
                             })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
@@ -595,30 +597,135 @@ impl Client {
         slabel: SLabel,
         fee_rate: Option<FeeRate>,
     ) -> Task<WalletResult<WalletResponse>> {
-        let name = slabel.to_string();
         let client = self.client.clone();
         Task::perform(
             async move {
                 let result = client
                     .wallet_send_request(
                         &wallet,
-                        RpcWalletTxBuilder {
-                            bidouts: None,
-                            requests: vec![RpcWalletRequest::Transfer(TransferSpacesParams {
-                                spaces: vec![name],
+                        wallet_tx(
+                            vec![RpcWalletRequest::Transfer(TransferSpacesParams {
+                                spaces: vec![Subject::Label(slabel)],
                                 to: Some(recipient),
+                                data: None,
+                                secret: None,
                             })],
                             fee_rate,
-                            dust: None,
-                            force: false,
-                            confirmed_only: false,
-                            skip_tx_check: false,
-                        },
+                        ),
                     )
                     .await;
                 (wallet, result)
             },
             map_wallet_result,
+        )
+    }
+
+    pub fn operate_space(
+        &self,
+        wallet: String,
+        slabel: SLabel,
+        fee_rate: Option<FeeRate>,
+    ) -> Task<WalletResult<WalletResponse>> {
+        let client = self.client.clone();
+        Task::perform(
+            async move {
+                let result = client
+                    .wallet_send_request(
+                        &wallet,
+                        wallet_tx(
+                            vec![RpcWalletRequest::Operate(OperateParams {
+                                subject: Subject::Label(slabel),
+                            })],
+                            fee_rate,
+                        ),
+                    )
+                    .await;
+                (wallet, result)
+            },
+            map_wallet_result,
+        )
+    }
+
+    pub fn delegate_space(
+        &self,
+        wallet: String,
+        slabel: SLabel,
+        to: String,
+        fee_rate: Option<FeeRate>,
+    ) -> Task<WalletResult<WalletResponse>> {
+        let client = self.client.clone();
+        Task::perform(
+            async move {
+                let result = client
+                    .wallet_send_request(
+                        &wallet,
+                        wallet_tx(
+                            vec![RpcWalletRequest::Delegate(DelegateParams {
+                                subject: Subject::Label(slabel),
+                                to,
+                            })],
+                            fee_rate,
+                        ),
+                    )
+                    .await;
+                (wallet, result)
+            },
+            map_wallet_result,
+        )
+    }
+
+    pub fn get_operator_status(&self, wallet: String, slabel: SLabel) -> Task<OperatorQuery> {
+        let client = self.client.clone();
+        Task::perform(
+            async move {
+                let slabel_for_error = slabel.clone();
+                let subject = Subject::Label(slabel.clone());
+                let outcome = async {
+                    let can_operate = client
+                        .wallet_can_operate(&wallet, subject.clone())
+                        .await
+                        .map_err(map_client_error)?;
+                    let delegation = client
+                        .get_delegation(subject)
+                        .await
+                        .map_err(map_client_error)?;
+                    let (num_id, num_script) = if let Some(id) = delegation {
+                        let num_id = id.to_string();
+                        match client
+                            .get_num(Subject::NumId(id))
+                            .await
+                            .map_err(map_client_error)?
+                        {
+                            Some(num) => (
+                                Some(num_id),
+                                Some(num.numout.script_pubkey.as_bytes().to_vec()),
+                            ),
+                            None => (None, None),
+                        }
+                    } else {
+                        (None, None)
+                    };
+                    Ok(OperatorQuery {
+                        slabel,
+                        num_id,
+                        num_script,
+                        can_operate,
+                        error: None,
+                    })
+                }
+                .await;
+                match outcome {
+                    Ok(query) => query,
+                    Err(error) => OperatorQuery {
+                        slabel: slabel_for_error,
+                        num_id: None,
+                        num_script: None,
+                        can_operate: false,
+                        error: Some(error),
+                    },
+                }
+            },
+            |query| query,
         )
     }
 
@@ -647,7 +754,9 @@ impl Client {
         let client = self.client.clone();
         Task::perform(
             async move {
-                let result = client.wallet_buy(&wallet, listing, fee_rate, false).await;
+                let result = client
+                    .wallet_buy(&wallet, listing, None, fee_rate, false)
+                    .await;
                 (wallet, result.map(|r| WalletResponse { result: vec![r] }))
             },
             map_wallet_result,
@@ -678,11 +787,12 @@ impl Client {
         slabel: SLabel,
         event: NostrEvent,
     ) -> Task<WalletResult<NostrEvent>> {
-        let space = slabel.to_string();
         let client = self.client.clone();
         Task::perform(
             async move {
-                let result = client.wallet_sign_event(&wallet, &space, event).await;
+                let result = client
+                    .wallet_sign_event(&wallet, Subject::Label(slabel), event)
+                    .await;
                 (wallet, result)
             },
             map_wallet_result,

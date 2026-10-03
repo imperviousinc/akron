@@ -29,6 +29,39 @@ pub fn recipient_from_str(s: &str) -> Option<String> {
     }
 }
 
+pub fn is_delegate_recipient_input(s: &str) -> bool {
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '@')
+}
+
+/// A delegate recipient is a space name (`@name`) or a space address
+/// (`bcs1…`, `tbs1…`, `bcrts1…`). Plain Bitcoin addresses stay invalid.
+pub fn delegate_recipient_from_str(s: &str) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Some(name) = trimmed.strip_prefix('@') {
+        return slabel_from_str(name).map(|_| trimmed.to_string());
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = if let Some(rest) = lower.strip_prefix("bcrts1") {
+        rest
+    } else if let Some(rest) = lower.strip_prefix("bcs1") {
+        rest
+    } else if let Some(rest) = lower.strip_prefix("tbs1") {
+        rest
+    } else {
+        return None;
+    };
+    const BECH32: &str = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    if !rest.is_empty() && rest.chars().all(|c| BECH32.contains(c)) {
+        Some(lower)
+    } else {
+        None
+    }
+}
+
 pub fn is_amount_input(s: &str) -> bool {
     s.chars().all(|c| c.is_ascii_digit())
 }

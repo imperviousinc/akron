@@ -200,6 +200,15 @@ impl State {
         self.client.get_space_info(slabel).map(Message::SpaceInfo)
     }
 
+    fn load_operator(&self, slabel: SLabel) -> Task<Message> {
+        let Some(wallet) = self.wallets.get_current() else {
+            return Task::none();
+        };
+        self.client
+            .get_operator_status(wallet.label.clone(), slabel)
+            .map(|query| Message::SpacesScreen(spaces::Message::OperatorStatus(query)))
+    }
+
     fn navigate_to(&mut self, route: Route) -> Task<Message> {
         match route {
             Route::Home => {
@@ -236,7 +245,10 @@ impl State {
                     self.screen = Screen::Spaces;
                 }
                 if let Some(slabel) = self.spaces_screen.get_slabel() {
-                    self.get_space_info(slabel)
+                    Task::batch([
+                        self.get_space_info(slabel.clone()),
+                        self.load_operator(slabel),
+                    ])
                 } else {
                     self.get_wallet_spaces()
                 }
@@ -244,7 +256,10 @@ impl State {
             Route::Space(slabel) => {
                 self.screen = Screen::Spaces;
                 self.spaces_screen.set_slabel(&slabel);
-                self.get_space_info(slabel)
+                Task::batch([
+                    self.get_space_info(slabel.clone()),
+                    self.load_operator(slabel),
+                ])
             }
             Route::Market => {
                 self.screen = Screen::Market;
@@ -273,7 +288,8 @@ impl State {
                     Screen::Spaces => {
                         tasks.push(self.get_wallet_spaces());
                         if let Some(slabel) = self.spaces_screen.get_slabel() {
-                            tasks.push(self.get_space_info(slabel));
+                            tasks.push(self.get_space_info(slabel.clone()));
+                            tasks.push(self.load_operator(slabel));
                         }
                     }
                     _ => {}
@@ -451,7 +467,14 @@ impl State {
             Message::SpacesScreen(message) => {
                 Action::Task(match self.spaces_screen.update(message) {
                     spaces::Action::WriteClipboard(s) => clipboard::write(s),
-                    spaces::Action::GetSpaceInfo { slabel } => self.get_space_info(slabel),
+                    spaces::Action::GetSpaceInfo { slabel } => {
+                        let info = self.get_space_info(slabel.clone());
+                        if self.spaces_screen.get_slabel().as_ref() == Some(&slabel) {
+                            Task::batch([info, self.load_operator(slabel)])
+                        } else {
+                            info
+                        }
+                    }
                     spaces::Action::OpenSpace { slabel, amount } => {
                         if self.fee_rate.is_none() {
                             self.fee_rate_confirmed_message =
@@ -506,6 +529,35 @@ impl State {
                             .renew_space(
                                 self.wallets.get_current().unwrap().label.clone(),
                                 slabel,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
+                    spaces::Action::OperateSpace { slabel } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::OperateSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
+                        }
+                        self.client
+                            .operate_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                self.fee_rate.take(),
+                            )
+                            .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))
+                    }
+                    spaces::Action::DelegateSpace { slabel, to } => {
+                        if self.fee_rate.is_none() {
+                            self.fee_rate_confirmed_message =
+                                Some(Message::SpacesScreen(spaces::Message::DelegateSubmit));
+                            return Action::Task(Task::done(Message::ShowFeeRateModal));
+                        }
+                        self.client
+                            .delegate_space(
+                                self.wallets.get_current().unwrap().label.clone(),
+                                slabel,
+                                to,
                                 self.fee_rate.take(),
                             )
                             .map(|r| Message::SpacesScreen(spaces::Message::ClientResult(r.result)))

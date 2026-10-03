@@ -10,6 +10,7 @@ pub struct SpaceData {
     outpoint: OutPoint,
     public_key: Option<XOnlyPublicKey>,
     covenant: Covenant,
+    script_pubkey: Vec<u8>,
 }
 #[derive(Debug, Default)]
 pub struct SpacesCollection(rustc_hash::FxHashMap<SLabel, Option<SpaceData>>);
@@ -21,6 +22,7 @@ impl SpacesCollection {
                 outpoint: out.outpoint(),
                 public_key: public_key_from_spaceout(&out.spaceout),
                 covenant: out.spaceout.space.unwrap().covenant,
+                script_pubkey: out.spaceout.script_pubkey.as_bytes().to_vec(),
             }),
         );
     }
@@ -33,6 +35,12 @@ impl SpacesCollection {
 
     pub fn get_covenant(&self, slabel: &SLabel) -> Option<Option<&Covenant>> {
         self.0.get(slabel).map(|o| o.as_ref().map(|s| &s.covenant))
+    }
+
+    pub fn get_script_pubkey(&self, slabel: &SLabel) -> Option<&[u8]> {
+        self.0
+            .get(slabel)
+            .and_then(|o| o.as_ref().map(|s| s.script_pubkey.as_slice()))
     }
 }
 
